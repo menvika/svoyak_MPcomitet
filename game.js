@@ -158,7 +158,6 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
   // ===================== SCREEN MANAGEMENT =====================
   const screens = {
     start: document.getElementById('screen-start'),
-    setup: document.getElementById('screen-setup'),
     board: document.getElementById('screen-board'),
     question: document.getElementById('screen-question'),
     final: document.getElementById('screen-final'),
