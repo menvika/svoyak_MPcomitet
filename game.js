@@ -2,6 +2,7 @@
    СВОЯ ИГРА — Game Logic (Dual-View: Host + Projector Display)
    #МПКомитет
    =================================================================== */
+const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Катя'];
 
 (() => {
   'use strict';
@@ -184,8 +185,12 @@
     ensureAudio();
     playClick();
     startBgMusic();
-    showScreen('setup');
-    renderPlayerInputs();
+    state.players = PLAYER_NAMES.map(name => ({ name, score: 0 }));
+    state.round = 1;
+    state.usedQuestions.clear();
+    renderBoard();
+    renderPlayersBar();
+    showScreen('board');
   });
 
   document.getElementById('btn-open-display').addEventListener('click', () => {
@@ -194,37 +199,6 @@
   });
 
   document.getElementById('btn-mute-start').addEventListener('click', toggleMute);
-
-  // ===================== PLAYER SETUP =====================
-  function renderPlayerInputs() {
-    const container = document.getElementById('player-inputs');
-    container.innerHTML = '';
-    for (let i = 1; i <= 5; i++) {
-      const row = document.createElement('div');
-      row.className = 'player-input-row';
-      row.innerHTML = `<span class="player-input-number">${i}</span><input type="text" placeholder="Игрок ${i}" value="Игрок ${i}" maxlength="14" />`;
-      container.appendChild(row);
-    }
-  }
-
-  document.getElementById('btn-setup-next').addEventListener('click', () => {
-    playClick();
-    const inputs = document.querySelectorAll('#player-inputs input');
-    state.players = Array.from(inputs).map((inp, i) => ({
-      name: inp.value.trim() || `Игрок ${i + 1}`,
-      score: 0,
-    }));
-    state.round = 1;
-    state.usedQuestions.clear();
-    renderBoard();
-    renderPlayersBar();
-    showScreen('board');
-  });
-
-  document.getElementById('btn-setup-back').addEventListener('click', () => {
-    playClick();
-    showScreen('start');
-  });
 
   // ===================== BOARD RENDERING =====================
   function getRoundData() {
@@ -693,13 +667,7 @@
       type: 'sync',
       phase: 'board',
       round: 1,
-      players: [
-        { name: 'Ксюша', score: 0 },
-        { name: 'Мила', score: 0 },
-        { name: 'Денис', score: 0 },
-        { name: 'Юля', score: 0 },
-        { name: 'Катя', score: 0 },
-      ],
+      players: PLAYER_NAMES.map(name => ({ name, score: 0 })),
       usedQuestions: [],
       currentQuestion: null,
       answerRevealed: false,
