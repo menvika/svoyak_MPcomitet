@@ -15,6 +15,20 @@
   <!-- Edge flash overlay for correct/wrong -->
   <div id="edge-flash" class="edge-flash"></div>
 
+  <!-- Редактирование баллов (ведущий) -->
+  <button id="btn-edit-scores" class="btn btn-ghost btn-sm score-edit-fab" type="button" style="display:none;">✏️ Баллы</button>
+  <div id="score-modal" class="modal" style="display:none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Редактирование баллов</h3>
+      <p class="modal-hint">Исправьте баллы вручную, если что-то пошло не так. Новые значения появятся на проекторе после «Сохранить».</p>
+      <div id="score-edit-list" class="score-edit-list"></div>
+      <div class="modal-actions">
+        <button id="btn-score-cancel" class="btn btn-ghost" type="button">Отмена</button>
+        <button id="btn-score-save" class="btn btn-primary" type="button">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== HOST VIEW ==================== -->
 
   <!-- ====== START SCREEN (host) ====== -->
@@ -36,8 +50,20 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
         </button>
       </div>
+      <div class="buzzer-link-box">
+        <div class="buzzer-link-label">🔔 Ссылка для участников (кнопки на телефонах):</div>
+        <a id="buzzer-link" class="buzzer-link" href="#" target="_blank" rel="noopener"></a>
+        <button id="btn-copy-buzzer-link" class="btn btn-ghost btn-sm" type="button">📋 Копировать</button>
+      </div>
       <p class="host-hint">Режим ведущего: вы видите ответы и управляете баллами.<br>Откройте экран проектора на втором мониторе.</p>
     </div>
+  </div>
+
+  <div id="screen-credits" class="screen">
+    <div id="credits-viewport" class="credits-viewport">
+      <div id="credits-roll" class="credits-roll"></div>
+    </div>
+    <button id="btn-credits-skip" class="btn btn-ghost credits-skip">Пропустить →</button>
   </div>
 
   <!-- ====== GAME BOARD SCREEN (host) ====== -->
@@ -93,12 +119,21 @@
         <div class="answer-text" id="answer-text"></div>
       </div>
 
-      <div class="question-controls">
-        <div class="timer-wrapper" id="timer-wrapper">
-          <div class="timer-bar" id="timer-bar"></div>
-          <span class="timer-text" id="timer-text">30</span>
+      <div class="buzz-panel" id="buzz-panel">
+        <div class="buzz-panel-head">
+          <div class="buzz-title">🔔 Кнопки игроков</div>
+          <div class="buzz-status closed" id="buzz-status">Кнопки закрыты</div>
         </div>
-        <button id="btn-timer-toggle" class="btn btn-ghost btn-sm">⏱️ Старт</button>
+        <div class="buzz-winner" id="buzz-winner" style="display:none;"></div>
+        <div class="buzz-locked" id="buzz-locked"></div>
+        <div class="buzz-actions">
+          <button id="btn-buzz-open" class="btn btn-primary" type="button">🔔 Открыть кнопки</button>
+          <button id="btn-buzz-close" class="btn btn-ghost" type="button" style="display:none;">⛔ Закрыть</button>
+          <button id="btn-buzz-correct" class="btn btn-success" type="button" style="display:none;">✓ Верно</button>
+          <button id="btn-buzz-wrong" class="btn btn-danger" type="button" style="display:none;">✗ Неверно</button>
+          <button id="btn-buzz-reset" class="btn btn-ghost btn-sm" type="button" style="display:none;">↺ Сбросить</button>
+        </div>
+        <div class="buzz-hint">Горячие клавиши: Пробел — открыть, Enter — верно, Backspace — неверно</div>
       </div>
 
       <div class="scoring-section" id="scoring-section">
@@ -177,8 +212,29 @@
 
   <!-- ==================== DISPLAY VIEW (projector) ==================== -->
   <div id="display-view" class="display-view" style="display:none;">
-    <!-- Display: Board -->
-    <div id="display-board-screen" class="display-screen active">
+    <!-- Display: Start (ожидание игры) -->
+    <div id="display-start-screen" class="display-screen active">
+      <div class="dino-decoration">
+        <span class="dino dino-1">🦕</span>
+        <span class="dino dino-2">🦖</span>
+      </div>
+      <div class="brand-tag">#МПКомитет</div>
+      <h1 class="game-title">Своя игра</h1>
+      <p class="game-subtitle">🦕 Динозаврики зовут играть! 🦖</p>
+      <div class="display-join">
+        <div class="display-join-label">🔔 Кнопки для игроков — откройте на телефоне:</div>
+        <div class="display-join-link" id="display-buzzer-link"></div>
+      </div>
+    </div>
+
+    <!-- Display: Credits -->
+    <div id="display-credits-screen" class="display-screen">
+      <div id="display-credits-viewport" class="credits-viewport">
+        <div id="display-credits-roll" class="credits-roll"></div>
+      </div>
+    </div>
+
+    <div id="display-board-screen" class="display-screen">
       <header class="display-header">
         <span class="brand-tag small">#МПКомитет</span>
         <span class="round-badge" id="display-round-badge">Раунд 1</span>
@@ -203,10 +259,7 @@
         <div class="display-answer-label">Ответ:</div>
         <div class="display-answer-text" id="display-answer-text"></div>
       </div>
-      <div class="display-timer-wrapper" id="display-timer-wrapper">
-        <div class="timer-bar" id="display-timer-bar"></div>
-        <span class="timer-text display-timer-text" id="display-timer-text"></span>
-      </div>
+      <div class="display-buzz" id="display-buzz"></div>
       <div id="display-players-bar-question" class="display-players-bar"></div>
     </div>
 
@@ -228,6 +281,28 @@
         <div id="display-winner-name" class="display-winner-name"></div>
         <div id="display-results-list" class="display-results-list"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="display-conn" class="display-conn" style="display:none;">⚠ Нет связи с сервером</div>
+
+  <!-- ==================== BUZZER VIEW (телефон участника) ==================== -->
+  <div id="buzzer-view" class="buzzer-view" style="display:none;">
+    <div id="buzzer-conn" class="buzzer-conn" style="display:none;">Нет связи с сервером…</div>
+
+    <div id="buzzer-pick" class="buzzer-pick">
+      <div class="brand-tag small">#МПКомитет</div>
+      <h2 class="section-title">Кто вы?</h2>
+      <div id="buzzer-pick-list" class="buzzer-pick-list"></div>
+    </div>
+
+    <div id="buzzer-play" class="buzzer-play" style="display:none;">
+      <div class="buzzer-who">
+        <span id="buzzer-name" class="buzzer-name"></span>
+        <button id="btn-buzzer-change" class="btn btn-ghost btn-sm" type="button">Сменить</button>
+      </div>
+      <button id="buzzer-btn" class="buzzer-btn idle" type="button">ЖДИТЕ</button>
+      <div id="buzzer-status" class="buzzer-status"></div>
     </div>
   </div>
 

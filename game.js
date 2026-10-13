@@ -2,7 +2,15 @@
    СВОЯ ИГРА — Game Logic (Dual-View: Host + Projector Display)
    #МПКомитет
    =================================================================== */
+// ===================== НАСТРОЙКИ (меняет только владелец) =====================
+// Имена игроков. Порядок важен: он же порядок кнопок у участников.
 const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Катя'];
+// Скорость бегущей строки с категориями (пикселей в секунду)
+const CREDITS_SPEED = 110;
+// Снимать очки, если нажавший первым ответил неверно (как в телеигре)
+const PENALTY_ON_WRONG = true;
+// Адрес сервера синхронизации и кнопок
+const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port/3001';
 
 (() => {
   'use strict';
@@ -23,6 +31,14 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
     return;
   }
 
+  if (VIEW === 'buzzer') {
+    document.body.setAttribute('data-view', 'buzzer');
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('buzzer-view').style.display = 'flex';
+    initBuzzer();
+    return;
+  }
+
   // ===================== STATE =====================
   const state = {
     players: [],
@@ -38,12 +54,13 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
   };
 
   // ===================== SYNC (backend server) =====================
-  const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port/3001';
   const SYNC_URL = SYNC_BASE + '/state';
+  let syncSeq = 0; // растёт с каждой отправкой: сервер игнорирует устаревшие запросы
 
   function buildSyncState() {
     return {
       type: 'sync',
+      seq: (syncSeq = Math.max(Date.now(), syncSeq + 1)),
       phase: state.phase,
       round: state.round,
       players: state.players.map(p => ({ name: p.name, score: p.score })),
@@ -77,7 +94,47 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
   function esc(str) {
     const d = document.createElement('div');
     d.textContent = String(str);
-    return d.innerHTML;
+    return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function apiJson(path, method, body) {
+    const resp = await fetch(SYNC_BASE + path, {
+      method: method || 'GET',
+      cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return resp.json();
+  }
+
+  function buildCreditsHTML() {
+    const rounds = [
+      { title: 'Раунд 1', data: QUESTIONS.round1 },
+      { title: 'Раунд 2', data: QUESTIONS.round2 },
+      { title: 'Раунд 3', data: QUESTIONS.round3 },
+    ];
+    let html = '<div class="credits-title">Своя игра</div>';
+    rounds.forEach(r => {
+      html += `<div class="credits-round">${r.title}</div>`;
+      r.data.forEach(cat => {
+        html += `<div class="credits-category">${esc(cat.category)}</div>`;
+      });
+    });
+    return html;
+  }
+
+  function playCredits(rollId, viewportId, onEnd) {
+    const roll = document.getElementById(rollId);
+    const vp = document.getElementById(viewportId);
+    roll.innerHTML = buildCreditsHTML();
+    roll.style.animation = 'none';
+    void roll.offsetHeight;
+    const vpH = vp.offsetHeight;
+    roll.style.setProperty('--vp', vpH + 'px');
+    const seconds = (roll.offsetHeight + vpH) / CREDITS_SPEED;
+    roll.style.animation = `creditsScroll ${seconds}s linear forwards`;
+    roll.onanimationend = onEnd || null;
   }
 
   // ===================== AUDIO (procedural) =====================
@@ -158,6 +215,7 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
   // ===================== SCREEN MANAGEMENT =====================
   const screens = {
     start: document.getElementById('screen-start'),
+    credits: document.getElementById('screen-credits'),
     board: document.getElementById('screen-board'),
     question: document.getElementById('screen-question'),
     final: document.getElementById('screen-final'),
@@ -168,6 +226,7 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
     state.phase = name;
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[name].classList.add('active');
+    updateScoreEditButton();
     broadcastState();
   }
 
@@ -189,8 +248,20 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
     state.usedQuestions.clear();
     renderBoard();
     renderPlayersBar();
-    showScreen('board');
+    buzzControl('new');
+    showScreen('credits');
+    startCredits();
   });
+
+  function startCredits() {
+    playCredits('credits-roll', 'credits-viewport', finishCredits);
+  }
+  function finishCredits() {
+    if (state.phase !== 'credits') return; // защита от повторного вызова (анимация + кнопка)
+    playClick();
+    showScreen('board');
+  }
+  document.getElementById('btn-credits-skip').addEventListener('click', finishCredits);
 
   document.getElementById('btn-open-display').addEventListener('click', () => {
     playClick();
@@ -198,6 +269,24 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
   });
 
   document.getElementById('btn-mute-start').addEventListener('click', toggleMute);
+
+  // ===================== ССЫЛКА ДЛЯ УЧАСТНИКОВ (кнопки) =====================
+  const BUZZER_URL = location.href.split('#')[0].split('?')[0] + '?view=buzzer';
+  (function initBuzzerLink() {
+    const a = document.getElementById('buzzer-link');
+    if (a) { a.textContent = BUZZER_URL; a.href = BUZZER_URL; }
+    const btn = document.getElementById('btn-copy-buzzer-link');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(BUZZER_URL);
+        btn.textContent = '✓ Скопировано';
+      } catch (e) {
+        window.prompt('Скопируйте ссылку для участников:', BUZZER_URL);
+      }
+      setTimeout(() => { btn.textContent = '📋 Копировать'; }, 1800);
+    });
+  })();
 
   // ===================== BOARD RENDERING =====================
   function getRoundData() {
@@ -336,19 +425,25 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
     // Render scoring immediately (host can score at any time)
     renderScoringPlayers('scoring-players', 'btn-question-done');
 
-    resetTimer(30);
+    buzzControl('new'); // сбросить кнопки участников для нового вопроса
+    resetBuzzUI();
     showScreen('question');
   }
 
-  document.getElementById('btn-back-to-board').addEventListener('click', () => {
-    playClick();
-    stopTimer();
+  // Выход из вопроса на поле (общее для «← К полю» и «Готово»)
+  function leaveQuestion() {
     state.currentQuestion = null;
     state.answerRevealed = false;
+    buzzControl('new');
     renderBoard();
     renderPlayersBar();
     checkRoundTransition();
     showScreen('board');
+  }
+
+  document.getElementById('btn-back-to-board').addEventListener('click', () => {
+    playClick();
+    leaveQuestion();
   });
 
   // Reveal answer to display (and show on host too)
@@ -401,70 +496,196 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
 
   document.getElementById('btn-question-done').addEventListener('click', () => {
     playClick();
-    state.currentQuestion = null;
-    state.answerRevealed = false;
-    renderBoard();
-    renderPlayersBar();
-    checkRoundTransition();
-    showScreen('board');
+    leaveQuestion();
   });
 
-  // ===================== TIMER =====================
-  function resetTimer(seconds) {
-    stopTimer();
-    state.timer.max = seconds;
-    state.timer.seconds = seconds;
-    state.timer.running = false;
-    updateTimerUI();
-    document.getElementById('btn-timer-toggle').textContent = '⏱️ Старт';
-    broadcastState();
-  }
-
+  // ===================== TIMER (только финальный раунд) =====================
   function stopTimer() {
     if (state.timer.interval) { clearInterval(state.timer.interval); state.timer.interval = null; }
     state.timer.running = false;
   }
 
-  function startTimer() {
-    stopTimer();
-    state.timer.running = true;
-    document.getElementById('btn-timer-toggle').textContent = '⏸️ Пауза';
-    state.timer.interval = setInterval(() => {
-      state.timer.seconds--;
-      updateTimerUI();
-      if (state.timer.seconds <= 5 && state.timer.seconds > 0) playTimerTick();
-      if (state.timer.seconds <= 0) {
-        stopTimer();
-        document.getElementById('btn-timer-toggle').textContent = '⏱️ Время!';
-        playWrong();
-        flashEdge(false);
-      }
-      broadcastState();
-    }, 1000);
+  // ===================== КНОПКИ УЧАСТНИКОВ (ведущий) =====================
+  // Состояние кнопок живёт на сервере (кто нажал первым решает порядок прихода
+  // запросов). Здесь — его копия для панели ведущего.
+  const buzz = { open: false, winner: null, locked: [], online: true, key: '', judged: false };
+  let buzzEpoch = 0; // чтобы запоздавший опрос не затирал свежий ответ на команду
+
+  function playBuzzSound() {
+    if (state.muted) return;
+    beep(880, 0.12, 'square', 0.22);
+    setTimeout(() => beep(1175, 0.2, 'square', 0.22), 110);
   }
 
-  function updateTimerUI() {
-    const bar = document.getElementById('timer-bar');
-    const text = document.getElementById('timer-text');
-    if (!bar || !text) return;
-    const pct = (state.timer.seconds / state.timer.max) * 100;
-    bar.style.width = pct + '%';
-    text.textContent = state.timer.seconds;
-    bar.classList.toggle('warning', state.timer.seconds <= 5);
+  function applyBuzz(d) {
+    const prevWinner = buzz.winner;
+    buzz.open = !!d.open;
+    buzz.winner = (d.winner === null || d.winner === undefined) ? null : d.winner;
+    buzz.locked = Array.isArray(d.locked) ? d.locked : [];
+    buzz.online = true;
+    const key = d.round + ':' + buzz.winner;
+    if (key !== buzz.key) { buzz.key = key; buzz.judged = false; }
+    if (buzz.winner !== null && prevWinner === null && state.phase === 'question') playBuzzSound();
+    renderBuzzPanel();
   }
 
-  document.getElementById('btn-timer-toggle').addEventListener('click', () => {
-    playClick();
-    if (state.timer.running) {
-      stopTimer();
-      document.getElementById('btn-timer-toggle').textContent = '⏱️ Продолжить';
-      broadcastState();
-    } else if (state.timer.seconds > 0) {
-      startTimer();
+  function resetBuzzUI() {
+    buzz.open = false; buzz.winner = null; buzz.locked = []; buzz.judged = false; buzz.key = '';
+    renderBuzzPanel();
+  }
+
+  async function buzzControl(action) {
+    buzzEpoch++;
+    try { applyBuzz(await apiJson('/buzz/control', 'POST', { action })); }
+    catch (e) { buzz.online = false; renderBuzzPanel(); }
+  }
+
+  async function pollBuzz() {
+    if (state.phase !== 'question') return;
+    const epoch = buzzEpoch;
+    try {
+      const d = await apiJson('/buzz', 'GET');
+      if (epoch === buzzEpoch) applyBuzz(d);
+    } catch (e) { buzz.online = false; renderBuzzPanel(); }
+  }
+  setInterval(pollBuzz, 250);
+
+  function renderBuzzPanel() {
+    const status = document.getElementById('buzz-status');
+    if (!status) return;
+    const winnerBox = document.getElementById('buzz-winner');
+    const lockedBox = document.getElementById('buzz-locked');
+    const q = state.currentQuestion;
+    const price = q ? q.price : 0;
+    const w = buzz.winner;
+    const winnerName = (w !== null && state.players[w]) ? state.players[w].name : null;
+    const allLocked = state.players.length > 0 && buzz.locked.length >= state.players.length;
+
+    let text, cls;
+    if (!buzz.online) { text = 'Нет связи с сервером кнопок'; cls = 'offline'; }
+    else if (winnerName !== null && buzz.judged) { text = 'Ответ учтён'; cls = 'closed'; }
+    else if (winnerName !== null) { text = 'Первым нажал — ждём ответ'; cls = 'winner'; }
+    else if (buzz.open) { text = 'Кнопки открыты — ждём нажатия'; cls = 'open'; }
+    else if (allLocked) { text = 'Все уже ответили неверно'; cls = 'closed'; }
+    else { text = 'Кнопки закрыты'; cls = 'closed'; }
+    status.textContent = text;
+    status.className = 'buzz-status ' + cls;
+
+    if (winnerName !== null) {
+      winnerBox.style.display = 'flex';
+      winnerBox.innerHTML = '<span class="buzz-winner-icon">🔔</span><span class="buzz-winner-name">' + esc(winnerName) + '</span>';
     } else {
-      resetTimer(30);
-      startTimer();
+      winnerBox.style.display = 'none';
+      winnerBox.innerHTML = '';
     }
+
+    const lockedNames = buzz.locked.map(i => state.players[i] ? state.players[i].name : '').filter(Boolean);
+    lockedBox.textContent = lockedNames.length ? 'Уже отвечали неверно: ' + lockedNames.join(', ') : '';
+
+    const judging = winnerName !== null && !buzz.judged;
+    const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+    show('btn-buzz-open', !buzz.open && winnerName === null && !allLocked);
+    show('btn-buzz-close', buzz.open && winnerName === null);
+    show('btn-buzz-correct', judging);
+    show('btn-buzz-wrong', judging);
+    show('btn-buzz-reset', winnerName !== null || buzz.locked.length > 0);
+
+    const bc = document.getElementById('btn-buzz-correct');
+    const bw = document.getElementById('btn-buzz-wrong');
+    if (bc) bc.textContent = '✓ Верно +' + price;
+    if (bw) bw.textContent = PENALTY_ON_WRONG ? '✗ Неверно −' + price : '✗ Неверно';
+  }
+
+  document.getElementById('btn-buzz-open').addEventListener('click', () => { playClick(); buzzControl('open'); });
+  document.getElementById('btn-buzz-close').addEventListener('click', () => { playClick(); buzzControl('close'); });
+  document.getElementById('btn-buzz-reset').addEventListener('click', () => { playClick(); buzzControl('reset'); });
+
+  function buzzCorrect() {
+    const idx = buzz.winner;
+    if (idx === null || buzz.judged || !state.currentQuestion || !state.players[idx]) return;
+    buzz.judged = true;
+    renderBuzzPanel();
+    adjustScore(idx, state.currentQuestion.price, true);
+    buzzControl('close');
+  }
+
+  function buzzWrong() {
+    const idx = buzz.winner;
+    if (idx === null || buzz.judged || !state.currentQuestion || !state.players[idx]) return;
+    buzz.judged = true;
+    renderBuzzPanel();
+    adjustScore(idx, PENALTY_ON_WRONG ? -state.currentQuestion.price : 0, false);
+    buzzControl('wrong');
+  }
+
+  document.getElementById('btn-buzz-correct').addEventListener('click', buzzCorrect);
+  document.getElementById('btn-buzz-wrong').addEventListener('click', buzzWrong);
+
+  // Горячие клавиши на экране вопроса (как на timbrica): Пробел — открыть, Enter — верно, Backspace — неверно
+  document.addEventListener('keydown', e => {
+    if (state.phase !== 'question' || e.repeat) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (document.getElementById('score-modal').style.display !== 'none') return;
+    if (e.code === 'Space' && !buzz.open && buzz.winner === null) { e.preventDefault(); buzzControl('open'); }
+    else if (e.code === 'Enter' && buzz.winner !== null) { e.preventDefault(); buzzCorrect(); }
+    else if (e.code === 'Backspace' && buzz.winner !== null) { e.preventDefault(); buzzWrong(); }
+  });
+
+  // ===================== РЕДАКТОР БАЛЛОВ (ведущий) =====================
+  const SCORE_STEP = 100;
+
+  function updateScoreEditButton() {
+    const btn = document.getElementById('btn-edit-scores');
+    if (!btn) return;
+    btn.style.display = ['board', 'question', 'final'].includes(state.phase) ? '' : 'none';
+  }
+
+  function openScoreEditor() {
+    const list = document.getElementById('score-edit-list');
+    list.innerHTML = '';
+    state.players.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'score-edit-row';
+      row.innerHTML = `
+        <div class="score-edit-name">${esc(p.name)}</div>
+        <button class="score-btn minus" type="button" data-step="-1" aria-label="Минус ${SCORE_STEP}">−</button>
+        <input type="number" step="${SCORE_STEP}" value="${p.score}" data-player="${i}" />
+        <button class="score-btn plus" type="button" data-step="1" aria-label="Плюс ${SCORE_STEP}">+</button>
+      `;
+      const input = row.querySelector('input');
+      row.querySelectorAll('button').forEach(b => {
+        b.addEventListener('click', () => {
+          input.value = (parseInt(input.value, 10) || 0) + SCORE_STEP * parseInt(b.dataset.step, 10);
+        });
+      });
+      list.appendChild(row);
+    });
+    document.getElementById('score-modal').style.display = 'flex';
+  }
+
+  function closeScoreEditor() {
+    document.getElementById('score-modal').style.display = 'none';
+  }
+
+  document.getElementById('btn-edit-scores').addEventListener('click', () => { playClick(); openScoreEditor(); });
+  document.getElementById('btn-score-cancel').addEventListener('click', () => { playClick(); closeScoreEditor(); });
+  document.getElementById('score-modal').addEventListener('click', e => {
+    if (e.target.id === 'score-modal') closeScoreEditor();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeScoreEditor();
+  });
+  document.getElementById('btn-score-save').addEventListener('click', () => {
+    playClick();
+    document.querySelectorAll('#score-edit-list input').forEach(inp => {
+      const i = parseInt(inp.dataset.player, 10);
+      const v = parseInt(inp.value, 10);
+      if (!Number.isNaN(v) && state.players[i]) state.players[i].score = v;
+    });
+    closeScoreEditor();
+    renderPlayersBar();
+    broadcastState();
   });
 
   // ===================== FINAL ROUND =====================
@@ -618,15 +839,16 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
   // ===================== RESULTS =====================
   function showResults() {
     const sorted = [...state.players].map((p, i) => ({ ...p, index: i })).sort((a, b) => b.score - a.score);
-    const winner = sorted[0];
+    const top = sorted[0].score;
+    const leaders = top > 0 ? sorted.filter(p => p.score === top) : [];
 
-    document.getElementById('winner-name').textContent = winner.score > 0 ? winner.name : 'Ничья!';
+    document.getElementById('winner-name').textContent = leaders.length ? leaders.map(p => p.name).join(' и ') : 'Ничья!';
 
     const list = document.getElementById('results-list');
     list.innerHTML = '';
     sorted.forEach((player, rank) => {
       const row = document.createElement('div');
-      row.className = 'results-row' + (rank === 0 && winner.score > 0 ? ' winner' : '');
+      row.className = 'results-row' + (top > 0 && player.score === top ? ' winner' : '');
       row.innerHTML = `<span>${rank + 1}. ${esc(player.name)}</span><span class="results-row-score">${player.score}</span>`;
       list.appendChild(row);
     });
@@ -645,6 +867,8 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
     state.answerRevealed = false;
     state.finalAnswerRevealed = false;
     stopTimer();
+    buzzControl('new');
+    resetBuzzUI();
     startBgMusic();
     showScreen('start');
   });
@@ -655,16 +879,152 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
   updateMuteButtons();
   showScreen('start');
 
+
+  // ==================================================================
+  // BUZZER VIEW (телефон участника)
+  // ==================================================================
+  function initBuzzer() {
+    const KEY = 'svoyak_buzzer_player';
+    const pickEl = document.getElementById('buzzer-pick');
+    const playEl = document.getElementById('buzzer-play');
+    const listEl = document.getElementById('buzzer-pick-list');
+    const nameEl = document.getElementById('buzzer-name');
+    const btn = document.getElementById('buzzer-btn');
+    const statusEl = document.getElementById('buzzer-status');
+    const connEl = document.getElementById('buzzer-conn');
+
+    let me = null;
+    let net = { open: false, winner: null, locked: [] };
+    let sending = false;
+    let flashText = '';
+    let flashTimer = null;
+    let epoch = 0;
+
+    // Личная ссылка ?p=3 сразу выбирает игрока; иначе вспоминаем прошлый выбор
+    const qp = parseInt(new URLSearchParams(location.search).get('p'), 10);
+    if (qp >= 1 && qp <= PLAYER_NAMES.length) me = qp - 1;
+    else {
+      try {
+        const saved = parseInt(localStorage.getItem(KEY), 10);
+        if (saved >= 0 && saved < PLAYER_NAMES.length) me = saved;
+      } catch (e) {}
+    }
+
+    PLAYER_NAMES.forEach((name, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-primary btn-large buzzer-pick-btn';
+      b.textContent = name;
+      b.addEventListener('click', () => {
+        me = i;
+        try { localStorage.setItem(KEY, String(i)); } catch (e) {}
+        render();
+      });
+      listEl.appendChild(b);
+    });
+
+    document.getElementById('btn-buzzer-change').addEventListener('click', () => {
+      me = null;
+      render();
+    });
+
+    function showFlash(text) {
+      flashText = text;
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => { flashText = ''; render(); }, 1600);
+      render();
+    }
+
+    function applyNet(d) {
+      if (d.open && !net.open) flashText = ''; // кнопки открылись — старое «Рано!» больше не нужно
+      net = {
+        open: !!d.open,
+        winner: (d.winner === null || d.winner === undefined) ? null : d.winner,
+        locked: Array.isArray(d.locked) ? d.locked : [],
+      };
+      render();
+    }
+
+    function render() {
+      if (me === null) {
+        pickEl.style.display = 'flex';
+        playEl.style.display = 'none';
+        return;
+      }
+      pickEl.style.display = 'none';
+      playEl.style.display = 'flex';
+      nameEl.textContent = PLAYER_NAMES[me];
+
+      const locked = net.locked.includes(me);
+      let cls, label, sub, disabled = false;
+      if (locked) { cls = 'locked'; label = 'ЖДЁМ'; sub = 'Вы уже отвечали на этот вопрос'; disabled = true; }
+      else if (net.winner !== null && net.winner === me) { cls = 'win'; label = 'ВЫ ПЕРВЫЙ!'; sub = 'Отвечайте ведущему'; disabled = true; }
+      else if (net.winner !== null) { cls = 'lost'; label = 'НЕ УСПЕЛИ'; sub = 'Первым нажал: ' + PLAYER_NAMES[net.winner]; disabled = true; }
+      else if (net.open) { cls = 'ready'; label = 'ЖМИ!'; sub = 'Кнопки открыты'; }
+      else { cls = 'idle'; label = 'ЖДИТЕ'; sub = 'Ведущий читает вопрос…'; }
+
+      btn.className = 'buzzer-btn ' + cls;
+      btn.textContent = label;
+      btn.disabled = disabled;
+      statusEl.textContent = flashText || sub;
+    }
+
+    async function press() {
+      if (me === null || sending || btn.disabled) return;
+      sending = true;
+      epoch++;
+      try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {}
+      try {
+        const r = await apiJson('/buzz', 'POST', { player: me });
+        applyNet(r);
+        if (!r.ok && r.reason === 'closed') showFlash('Рано! Кнопки ещё закрыты');
+        else if (!r.ok && r.reason === 'late') showFlash('Не успели — первым нажал: ' + (PLAYER_NAMES[r.winner] || '…'));
+      } catch (e) {
+        showFlash('Нет связи, нажмите ещё раз');
+      }
+      sending = false;
+    }
+
+    // pointerdown, а не click: срабатывает сразу при касании, без задержки
+    btn.addEventListener('pointerdown', e => { e.preventDefault(); press(); });
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space' && !e.repeat) { e.preventDefault(); press(); }
+    });
+
+    async function poll() {
+      const myEpoch = epoch;
+      try {
+        const d = await apiJson('/buzz', 'GET');
+        connEl.style.display = 'none';
+        if (myEpoch === epoch && !sending) applyNet(d);
+      } catch (e) {
+        connEl.style.display = 'block';
+      }
+    }
+    setInterval(poll, 250);
+    poll();
+    render();
+
+    // Не давать телефону гаснуть, пока идёт игра (если браузер умеет)
+    try {
+      if (navigator.wakeLock) {
+        const lock = () => navigator.wakeLock.request('screen').catch(() => {});
+        lock();
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) lock(); });
+      }
+    } catch (e) {}
+  }
+
   // ==================================================================
   // DISPLAY VIEW LOGIC (projector)
   // ==================================================================
   function initDisplay() {
-    const SYNC_URL_DISP = ('port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port/3001') + '/state';
+    const SYNC_URL_DISP = SYNC_BASE + '/state';
 
-    // Initialize with local data so board shows immediately
+    // До первого сообщения от ведущего показываем стартовый экран
     let displayState = {
       type: 'sync',
-      phase: 'board',
+      phase: 'start',
       round: 1,
       players: PLAYER_NAMES.map(name => ({ name, score: 0 })),
       usedQuestions: [],
@@ -673,31 +1033,43 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
       timer: { seconds: 30, max: 30, running: false },
       finalBets: [],
       finalAnswerRevealed: false,
+      buzz: { open: false, winner: null, locked: [] },
     };
 
-    // Fetch state from server immediately
+    // Индикатор связи: красная плашка, если сервер недоступен
+    let failCount = 0;
+    let lastJson = '';
+    function setConn(ok) {
+      const el = document.getElementById('display-conn');
+      if (el) el.style.display = ok ? 'none' : 'block';
+    }
+
     async function fetchState() {
       try {
-        const resp = await fetch(SYNC_URL_DISP);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.players && data.players.length > 0) {
-            const newJson = JSON.stringify(data);
-            const oldJson = JSON.stringify(displayState);
-            if (newJson !== oldJson) {
-              displayState = data;
-              renderDisplay();
-            }
+        const resp = await fetch(SYNC_URL_DISP, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        failCount = 0;
+        setConn(true);
+        if (data && data.phase) {
+          const json = JSON.stringify(data);
+          if (json !== lastJson) {
+            lastJson = json;
+            displayState = data;
+            renderDisplay();
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        failCount++;
+        if (failCount >= 3) setConn(false);
+      }
     }
 
     // Initial fetch
     fetchState();
 
-    // Poll server every 400ms
-    setInterval(fetchState, 400);
+    // Poll server (чаще, чтобы «кто первый» появлялся сразу)
+    setInterval(fetchState, 250);
 
     function showDisplayScreen(id) {
       document.querySelectorAll('.display-screen').forEach(s => s.classList.remove('active'));
@@ -705,18 +1077,23 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
       if (el) el.classList.add('active');
     }
 
-    function renderDisplayPlayersBar(containerId) {
+    function renderDisplayPlayersBar(containerId, buzzMode) {
       const bar = document.getElementById(containerId);
       if (!bar) return;
       bar.innerHTML = '';
-      const players = displayState.players;
+      const players = displayState.players || [];
       if (!players.length) return;
+      const bz = buzzMode ? (displayState.buzz || {}) : {};
+      const lockedIdx = Array.isArray(bz.locked) ? bz.locked : [];
       const maxScore = Math.max(0, ...players.map(p => p.score));
       const leaders = players.filter(p => p.score === maxScore && maxScore > 0);
 
       players.forEach((player, i) => {
         const card = document.createElement('div');
-        card.className = 'display-player-card' + (leaders.includes(player) ? ' leading' : '');
+        let cls = 'display-player-card' + (leaders.includes(player) ? ' leading' : '');
+        if (buzzMode && bz.winner === i) cls += ' buzzed';
+        else if (buzzMode && lockedIdx.includes(i)) cls += ' locked';
+        card.className = cls;
         const negative = player.score < 0;
         card.innerHTML = `
           <div class="display-player-name" title="${esc(player.name)}">${esc(player.name)}</div>
@@ -780,17 +1157,27 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
         answerReveal.style.display = 'none';
       }
 
-      // Timer
-      const timerBar = document.getElementById('display-timer-bar');
-      const timerText = document.getElementById('display-timer-text');
-      if (timerBar && timerText) {
-        const pct = (displayState.timer.seconds / displayState.timer.max) * 100;
-        timerBar.style.width = pct + '%';
-        timerText.textContent = displayState.timer.seconds;
-        timerBar.classList.toggle('warning', displayState.timer.seconds <= 5);
-      }
+      renderDisplayBuzz();
+      renderDisplayPlayersBar('display-players-bar-question', true);
+    }
 
-      renderDisplayPlayersBar('display-players-bar-question');
+    // Плашка «кто первый нажал» на экране вопроса
+    function renderDisplayBuzz() {
+      const el = document.getElementById('display-buzz');
+      if (!el) return;
+      const b = displayState.buzz || {};
+      const players = displayState.players || [];
+      const w = (b.winner === null || b.winner === undefined) ? null : b.winner;
+      if (w !== null && players[w]) {
+        el.className = 'display-buzz winner';
+        el.innerHTML = '<span class="display-buzz-icon">🔔</span><span class="display-buzz-label">Первым нажал</span><span class="display-buzz-name">' + esc(players[w].name) + '</span>';
+      } else if (b.open) {
+        el.className = 'display-buzz open';
+        el.innerHTML = '<span class="display-buzz-icon">🔔</span><span class="display-buzz-label">Кнопки открыты — жмите!</span>';
+      } else {
+        el.className = 'display-buzz';
+        el.innerHTML = '';
+      }
     }
 
     function renderDisplayFinal() {
@@ -802,7 +1189,7 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
       if (displayState.currentQuestion) {
         // Question shown
         html += `<div class="display-question-card">`;
-        html += `<div class="display-question-text">${displayState.currentQuestion.question || q.question}</div>`;
+        html += `<div class="display-question-text">${esc(displayState.currentQuestion.question || q.question)}</div>`;
         if (q.image) html += `<div class="display-question-image-wrapper"><img class="display-question-image" src="${q.image}" alt="" /></div>`;
         html += `</div>`;
 
@@ -812,7 +1199,7 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
 
         // Answer if revealed
         if (displayState.finalAnswerRevealed) {
-          html += `<div class="display-answer-reveal"><div class="display-answer-label">Ответ:</div><div class="display-answer-text">${q.answer}</div></div>`;
+          html += `<div class="display-answer-reveal"><div class="display-answer-label">Ответ:</div><div class="display-answer-text">${esc(q.answer)}</div></div>`;
         }
       } else {
         // Betting phase
@@ -827,22 +1214,41 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
       const players = displayState.players;
       if (!players.length) return;
       const sorted = [...players].map((p, i) => ({ ...p, index: i })).sort((a, b) => b.score - a.score);
-      const winner = sorted[0];
+      const top = sorted[0].score;
+      const leaders = top > 0 ? sorted.filter(p => p.score === top) : [];
 
-      document.getElementById('display-winner-name').textContent = winner.score > 0 ? winner.name : 'Ничья!';
+      document.getElementById('display-winner-name').textContent = leaders.length ? leaders.map(p => p.name).join(' и ') : 'Ничья!';
 
       const list = document.getElementById('display-results-list');
       list.innerHTML = '';
       sorted.forEach((player, rank) => {
         const row = document.createElement('div');
-        row.className = 'display-results-row' + (rank === 0 && winner.score > 0 ? ' winner' : '');
+        row.className = 'display-results-row' + (top > 0 && player.score === top ? ' winner' : '');
         row.innerHTML = `<span>${rank + 1}. ${esc(player.name)}</span><span class="display-results-row-score">${player.score}</span>`;
         list.appendChild(row);
       });
     }
 
+    function renderDisplayStart() {
+      const a = document.getElementById('display-buzzer-link');
+      if (a) a.textContent = location.href.split('#')[0].split('?')[0] + '?view=buzzer';
+    }
+
+    let creditsShown = false;
     function renderDisplay() {
+      if (displayState.phase !== 'credits') creditsShown = false;
       switch (displayState.phase) {
+        case 'start':
+          showDisplayScreen('display-start-screen');
+          renderDisplayStart();
+          break;
+        case 'credits':
+          showDisplayScreen('display-credits-screen');
+          if (!creditsShown) {
+            creditsShown = true;
+            playCredits('display-credits-roll', 'display-credits-viewport');
+          }
+          break;
         case 'board':
           showDisplayScreen('display-board-screen');
           renderDisplayBoard();
