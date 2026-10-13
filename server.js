@@ -1,4 +1,48 @@
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+const PORT = 3001;
+
+// Файлы сайта, которые сервер отдаёт сам (чтобы всё открывалось одним адресом)
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
+  '.woff': 'font/woff', '.woff2': 'font/woff2',
+};
+
+function lanAddresses() {
+  const out = [];
+  const nets = os.networkInterfaces();
+  Object.keys(nets).forEach(name => {
+    (nets[name] || []).forEach(n => {
+      if (n.family === 'IPv4' && !n.internal) out.push(n.address);
+    });
+  });
+  return out;
+}
+
+function serveStatic(url, res) {
+  let rel;
+  try { rel = decodeURIComponent(url); } catch (e) { rel = ''; }
+  if (rel === '/' || rel === '') rel = '/index.html';
+  const full = path.normalize(path.join(__dirname, rel));
+  const base = path.basename(full);
+  const ext = path.extname(full).toLowerCase();
+  // только внутри папки игры, без скрытых файлов и без самого server.js
+  if (!full.startsWith(__dirname + path.sep) || base.startsWith('.') || base === 'server.js' || !MIME[ext]) {
+    res.writeHead(404); res.end('Not found'); return;
+  }
+  fs.readFile(full, (err, data) => {
+    if (err) { res.writeHead(404); res.end('Not found'); return; }
+    res.writeHead(200, { 'Content-Type': MIME[ext], 'Cache-Control': 'no-store' });
+    res.end(data);
+  });
+}
 
 // Состояние игры (его присылает ведущий, читает проектор)
 let gameState = null;
@@ -53,6 +97,12 @@ const server = http.createServer((req, res) => {
 
   // Путь без параметров и без возможного префикса прокси
   const url = req.url.split('?')[0].replace(/^\/port\/3001/, '').replace(/\/+$/, '') || '/';
+
+  // ---------- информация о сервере (для ссылки участникам) ----------
+  if (url === '/info' && req.method === 'GET') {
+    send(res, 200, { ok: true, version: 2, port: PORT, ips: lanAddresses() });
+    return;
+  }
 
   // ---------- состояние игры ----------
   if (url === '/state' && req.method === 'GET') {
@@ -132,10 +182,24 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'GET' || req.method === 'HEAD') { serveStatic(url, res); return; }
+
   res.writeHead(404);
   res.end('Not found');
 });
 
-server.listen(3001, '0.0.0.0', () => {
-  console.log('Sync server running on 0.0.0.0:3001');
+server.on('error', err => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('Порт ' + PORT + ' уже занят. Закройте старый сервер (или старое окно с node server.js) и запустите снова.');
+  } else {
+    console.error(err);
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log('Сервер игры запущен.');
+  console.log('  Ведущий:      http://localhost:' + PORT + '/');
+  console.log('  Проектор:     http://localhost:' + PORT + '/?view=display');
+  lanAddresses().forEach(ip => console.log('  Участники:    http://' + ip + ':' + PORT + '/?view=buzzer'));
 });

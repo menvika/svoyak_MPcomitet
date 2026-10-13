@@ -1410,3 +1410,36 @@ img { display: block; max-width: 100%; height: auto; }
   .score-edit-row { grid-template-columns: 1fr auto 90px auto; }
   .buzz-actions .btn { flex: 1 1 140px; }
 }
+
+
+/* ===================================================================
+   СВЯЗЬ С СЕРВЕРОМ, НАВИГАЦИЯ НАЗАД
+   =================================================================== */
+.net-pill {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  z-index: 3000;
+  max-width: min(92vw, 760px);
+  background: var(--color-danger);
+  color: #fff;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  display: none;
+}
+.net-pill b { display: block; font-family: var(--font-display); font-size: var(--text-base); }
+.net-pill span { display: block; font-size: var(--text-sm); margin-top: 4px; opacity: 0.95; word-break: break-word; }
+
+.server-status { font-size: var(--text-sm); font-weight: 700; margin-bottom: var(--space-2); color: var(--color-text-muted); }
+.server-status.ok { color: var(--color-success-dark); }
+.server-status.bad { color: var(--color-danger); }
+
+.credits-back { right: auto; left: var(--space-4); }
+.final-back { position: absolute; left: 0; top: 0; }
+.final-header { position: relative; }
+.scoring-player-row.judged { opacity: 0.6; }
+.score-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+#btn-results-back { margin-top: var(--space-3); }

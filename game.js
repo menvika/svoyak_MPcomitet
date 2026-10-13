@@ -9,8 +9,126 @@ const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Кат�
 const CREDITS_SPEED = 110;
 // Снимать очки, если нажавший первым ответил неверно (как в телеигре)
 const PENALTY_ON_WRONG = true;
-// Адрес сервера синхронизации и кнопок
-const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port/3001';
+// ===================== СВЯЗЬ С СЕРВЕРОМ =====================
+// Игра сама ищет сервер (node server.js, порт 3001) по списку адресов:
+//   1) тот же адрес, с которого открыта страница (если сайт отдаёт сам server.js)
+//   2) port/3001 — схема с прокси хостинга
+//   3) тот же компьютер, порт 3001 (сайт открыт отдельно, например двойным щелчком или Live Server)
+const SYNC_CANDIDATES = (() => {
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    const list = ['', 'port/3001'];
+    if (location.protocol === 'http:') list.push('http://' + location.hostname + ':3001');
+    return list;
+  }
+  return ['http://localhost:3001'];
+})();
+const NET = { base: null, ok: null, fails: 0, missing: new Set(), detecting: null, lastDetect: 0, onUp: [], info: null };
+const NET_VIEW = new URLSearchParams(location.search).get('view') || 'host';
+
+function fetchTimeout(url, opts, ms) {
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = setTimeout(() => { if (ctl) ctl.abort(); }, ms);
+  return fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : {}))
+    .finally(() => clearTimeout(timer));
+}
+
+async function probeBase(base) {
+  try {
+    const r = await fetchTimeout(base + '/state', { cache: 'no-store' }, 2500);
+    if (!r.ok) return false;
+    const d = await r.json();
+    return !!d && typeof d === 'object' && !Array.isArray(d);
+  } catch (e) { return false; }
+}
+
+function detectBase() {
+  if (!NET.detecting) {
+    NET.detecting = (async () => {
+      for (const c of SYNC_CANDIDATES) {
+        if (await probeBase(c)) { NET.base = c; return c; }
+      }
+      return null;
+    })().then(r => { NET.lastDetect = Date.now(); NET.detecting = null; return r; });
+  }
+  return NET.detecting;
+}
+
+function netTriedList() {
+  return SYNC_CANDIDATES.map(c => {
+    try { return new URL(c + '/', location.href).href.replace(/\/$/, ''); } catch (e) { return c; }
+  });
+}
+
+function renderNetPill() {
+  const down = NET.ok === false;
+  const stale = NET.missing.size > 0;
+
+  const st = document.getElementById('server-status');
+  if (st) {
+    if (NET.ok === null) { st.textContent = 'Проверяю связь с сервером…'; st.className = 'server-status'; }
+    else if (down) { st.textContent = '⚠ Сервер не найден — запустите node server.js'; st.className = 'server-status bad'; }
+    else if (stale) { st.textContent = '⚠ Сервер устарел — замените server.js и перезапустите'; st.className = 'server-status bad'; }
+    else { st.textContent = '✓ Сервер подключён'; st.className = 'server-status ok'; }
+  }
+
+  let el = document.getElementById('net-pill');
+  if (!down && !stale) { if (el) el.style.display = 'none'; return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'net-pill';
+    el.className = 'net-pill';
+    el.innerHTML = '<b></b><span></span>';
+    document.body.appendChild(el);
+  }
+  const title = el.querySelector('b');
+  const hint = el.querySelector('span');
+  if (down) {
+    title.textContent = '⚠ Нет связи с сервером';
+    hint.textContent = NET_VIEW === 'buzzer'
+      ? 'Подключитесь к той же Wi-Fi сети, что и ведущий, и откройте ссылку, которую он показывает.'
+      : 'Запустите на компьютере ведущего «node server.js» и откройте игру по адресу http://localhost:3001 . Пробовал: ' + netTriedList().join(' , ');
+  } else {
+    title.textContent = '⚠ Сервер устарел';
+    hint.textContent = 'Замените файл server.js на новый, закройте окно со старым сервером и запустите «node server.js» заново.';
+  }
+  el.style.display = 'block';
+}
+
+function netSet(ok) {
+  const was = NET.ok;
+  if (ok) { NET.fails = 0; NET.ok = true; }
+  else { NET.fails++; if (NET.fails >= 2) NET.ok = false; }
+  renderNetPill();
+  if (ok && was === false) NET.onUp.forEach(f => { try { f(); } catch (e) {} });
+}
+
+async function apiJson(path, method, body) {
+  if (NET.base === null) {
+    if (!NET.detecting && Date.now() - NET.lastDetect < 1500) throw new Error('no server');
+    if (await detectBase() === null) { netSet(false); throw new Error('no server'); }
+  }
+  let resp;
+  try {
+    resp = await fetchTimeout(NET.base + path, {
+      method: method || 'GET',
+      cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    }, 5000);
+  } catch (e) {
+    if (NET.fails >= 1) NET.base = null; // в следующий раз поищем сервер заново
+    netSet(false);
+    throw e;
+  }
+  if (resp.status === 404) { NET.missing.add(path); netSet(true); throw new Error('HTTP 404'); }
+  if (!resp.ok) { netSet(false); throw new Error('HTTP ' + resp.status); }
+  let data;
+  try { data = await resp.json(); }
+  catch (e) { NET.base = null; netSet(false); throw e; }
+  NET.missing.delete(path);
+  netSet(true);
+  return data;
+}
 
 (() => {
   'use strict';
@@ -51,10 +169,16 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
     finalBets: [],
     finalAnswerRevealed: false,
     muted: false,
+    started: false,        // игра начата (есть что продолжать)
+    lastPhase: 'start',    // последний игровой экран (для «Продолжить»)
+    questionSpent: false,  // на текущем вопросе уже были очки/ответ — вопрос сгорает
+    leaveDone: false,      // вышли из вопроса кнопкой «Готово»
+    finalStarted: false,
+    finalShown: false,     // финальный вопрос уже показан (ставки сделаны)
+    finalJudged: [],       // кому из игроков уже засчитан финальный ответ
   };
 
   // ===================== SYNC (backend server) =====================
-  const SYNC_URL = SYNC_BASE + '/state';
   let syncSeq = 0; // растёт с каждой отправкой: сервер игнорирует устаревшие запросы
 
   function buildSyncState() {
@@ -80,14 +204,8 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   }
 
   function broadcastState() {
-    const data = buildSyncState();
-    try {
-      fetch(SYNC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }).catch(() => {});
-    } catch (e) {}
+    saveGame();
+    apiJson('/state', 'POST', buildSyncState()).catch(() => {});
   }
 
   // ===================== UTILS =====================
@@ -97,26 +215,14 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
     return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  async function apiJson(path, method, body) {
-    const resp = await fetch(SYNC_BASE + path, {
-      method: method || 'GET',
-      cache: 'no-store',
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    return resp.json();
-  }
-
   function buildCreditsHTML() {
     const rounds = [
-      { title: 'Раунд 1', data: QUESTIONS.round1 },
-      { title: 'Раунд 2', data: QUESTIONS.round2 },
-      { title: 'Раунд 3', data: QUESTIONS.round3 },
+      { data: QUESTIONS.round1 },
+      { data: QUESTIONS.round2 },
+      { data: QUESTIONS.round3 },
     ];
     let html = '<div class="credits-title">Своя игра</div>';
     rounds.forEach(r => {
-      html += `<div class="credits-round">${r.title}</div>`;
       r.data.forEach(cat => {
         html += `<div class="credits-category">${esc(cat.category)}</div>`;
       });
@@ -222,12 +328,168 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
     results: document.getElementById('screen-results'),
   };
 
-  function showScreen(name) {
+  // История браузера: кнопка «Назад» (и в браузере, и в игре) возвращает на прошлый экран
+  let histDepth = (history.state && Number.isInteger(history.state.d)) ? history.state.d : 0;
+  let ignorePop = false;
+
+  function syncHistory(mode) {
+    try {
+      if (mode === 'push') { history.pushState({ d: histDepth + 1 }, ''); histDepth++; }
+      else if (mode === 'replace') history.replaceState({ d: histDepth }, '');
+    } catch (e) {}
+  }
+
+  // mode: 'push' (вперёд, по умолчанию) | 'replace' | 'pop' (уже вернулись назад)
+  function showScreen(name, mode) {
     state.phase = name;
+    if (name !== 'start') state.lastPhase = name;
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[name].classList.add('active');
+    if (name === 'start') renderStartScreen();
     updateScoreEditButton();
+    syncHistory(mode || 'push');
     broadcastState();
+  }
+
+  function requestBack() {
+    if (histDepth > 0) { try { history.back(); return; } catch (e) {} }
+    doBack();
+  }
+
+  // Что значит «назад» на каждом экране. Данные игры при этом не теряются.
+  function doBack() {
+    closeScoreEditor();
+    switch (state.phase) {
+      case 'credits': {
+        const roll = document.getElementById('credits-roll');
+        roll.onanimationend = null;
+        roll.style.animation = 'none';
+        showScreen('start', 'pop');
+        break;
+      }
+      case 'board':
+        showScreen('start', 'pop');
+        break;
+      case 'question':
+        finishLeaveQuestion();
+        break;
+      case 'final':
+        stopTimer();
+        refreshFinalTimerButton();
+        renderBoard();
+        renderPlayersBar();
+        showScreen('board', 'pop');
+        break;
+      case 'results':
+        showScreen('final', 'pop');
+        break;
+      default: break; // на стартовом экране назад некуда
+    }
+  }
+
+  window.addEventListener('popstate', e => {
+    const d = (e.state && Number.isInteger(e.state.d)) ? e.state.d : 0;
+    if (ignorePop) { ignorePop = false; histDepth = d; return; }
+    if (d > histDepth) { histDepth = d; ignorePop = true; try { history.forward ? history.back() : 0; } catch (err) {} return; }
+    histDepth = d;
+    doBack();
+  });
+
+  // ===================== СОХРАНЕНИЕ ИГРЫ =====================
+  const SAVE_KEY = 'svoyak_save_v1';
+
+  function saveGame() {
+    try {
+      if (!state.started) { localStorage.removeItem(SAVE_KEY); return; }
+      const used = Array.from(state.usedQuestions);
+      const q = state.currentQuestion;
+      if (state.phase === 'question' && q && q.qKey && state.questionSpent && !used.includes(q.qKey)) used.push(q.qKey);
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        v: 1,
+        scores: state.players.map(p => p.score),
+        round: state.round,
+        used,
+        lastPhase: state.lastPhase,
+        finalStarted: state.finalStarted,
+        finalShown: state.finalShown,
+        finalBets: state.finalBets,
+        finalJudged: state.finalJudged,
+        finalAnswerRevealed: state.finalAnswerRevealed,
+        timerSeconds: state.timer.seconds,
+        timerMax: state.timer.max,
+      }));
+    } catch (e) {}
+  }
+
+  function loadGame() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (!s || s.v !== 1 || !Array.isArray(s.scores) || s.scores.length !== PLAYER_NAMES.length) {
+        localStorage.removeItem(SAVE_KEY);
+        return;
+      }
+      state.players = PLAYER_NAMES.map((name, i) => ({ name, score: Number(s.scores[i]) || 0 }));
+      state.round = [1, 2, 3].includes(s.round) ? s.round : 1;
+      state.usedQuestions = new Set(Array.isArray(s.used) ? s.used : []);
+      state.lastPhase = ['credits', 'board', 'question', 'final', 'results'].includes(s.lastPhase) ? s.lastPhase : 'board';
+      state.finalStarted = !!s.finalStarted;
+      state.finalShown = !!s.finalShown;
+      state.finalBets = Array.isArray(s.finalBets) ? s.finalBets : [];
+      state.finalJudged = Array.isArray(s.finalJudged) ? s.finalJudged : [];
+      state.finalAnswerRevealed = !!s.finalAnswerRevealed;
+      if (Number.isFinite(s.timerMax) && Number.isFinite(s.timerSeconds)) {
+        state.timer.max = s.timerMax; state.timer.seconds = s.timerSeconds;
+      }
+      state.started = true;
+    } catch (e) {
+      try { localStorage.removeItem(SAVE_KEY); } catch (e2) {}
+    }
+  }
+
+  function resetGameData() {
+    state.players = [];
+    state.round = 1;
+    state.usedQuestions.clear();
+    state.currentQuestion = null;
+    state.answerRevealed = false;
+    state.questionSpent = false;
+    state.leaveDone = false;
+    state.finalBets = [];
+    state.finalJudged = [];
+    state.finalStarted = false;
+    state.finalShown = false;
+    state.finalAnswerRevealed = false;
+    state.started = false;
+    state.lastPhase = 'start';
+    finalBuilt = false;
+    stopTimer();
+    state.timer.max = 30; state.timer.seconds = 30;
+  }
+
+  // ===================== ПОДТВЕРЖДЕНИЕ =====================
+  function confirmDialog(title, text, okLabel) {
+    return new Promise(resolve => {
+      const m = document.createElement('div');
+      m.className = 'modal';
+      m.style.display = 'flex';
+      m.innerHTML = '<div class="modal-card"><h3 class="modal-title"></h3><p class="modal-hint"></p>' +
+        '<div class="modal-actions"><button type="button" class="btn btn-ghost" data-r="0">Отмена</button>' +
+        '<button type="button" class="btn btn-danger" data-r="1"></button></div></div>';
+      m.querySelector('.modal-title').textContent = title;
+      m.querySelector('.modal-hint').textContent = text;
+      m.querySelector('[data-r="1"]').textContent = okLabel || 'Да';
+      const done = v => { m.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+      const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+      document.addEventListener('keydown', onKey, true);
+      m.addEventListener('click', e => {
+        if (e.target === m) done(false);
+        const b = e.target.closest('[data-r]');
+        if (b) done(b.dataset.r === '1');
+      });
+      document.body.appendChild(m);
+    });
   }
 
   // ===================== EDGE FLASH =====================
@@ -239,13 +501,42 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   }
 
   // ===================== START SCREEN =====================
-  document.getElementById('btn-start').addEventListener('click', () => {
+  function renderStartScreen() {
+    const cont = document.getElementById('btn-continue');
+    const st = document.getElementById('btn-start');
+    if (!cont || !st) return;
+    const has = state.started;
+    cont.style.display = has ? '' : 'none';
+    cont.textContent = state.lastPhase === 'results' ? '▶ К итогам' : state.lastPhase === 'final' ? '▶ Продолжить: финал' : '▶ Продолжить игру';
+    st.textContent = has ? 'Начать заново' : 'Начать игру';
+    st.classList.toggle('btn-large', !has);
+    st.classList.toggle('btn-primary', !has);
+    st.classList.toggle('btn-ghost', has);
+  }
+
+  document.getElementById('btn-continue').addEventListener('click', () => {
     ensureAudio();
     playClick();
     startBgMusic();
+    renderBoard();
+    renderPlayersBar();
+    const t = state.lastPhase;
+    if (t === 'final') { startFinalRound(); }
+    else if (t === 'results') { showResults(true); }
+    else showScreen('board');
+  });
+
+  document.getElementById('btn-start').addEventListener('click', async () => {
+    if (state.started) {
+      const ok = await confirmDialog('Начать заново?', 'Баллы и использованные вопросы будут сброшены. Чтобы вернуться в текущую игру, нажмите «Отмена» и выберите «Продолжить».', 'Начать заново');
+      if (!ok) return;
+    }
+    ensureAudio();
+    playClick();
+    startBgMusic();
+    resetGameData();
     state.players = PLAYER_NAMES.map(name => ({ name, score: 0 }));
-    state.round = 1;
-    state.usedQuestions.clear();
+    state.started = true;
     renderBoard();
     renderPlayersBar();
     buzzControl('new');
@@ -259,9 +550,11 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   function finishCredits() {
     if (state.phase !== 'credits') return; // защита от повторного вызова (анимация + кнопка)
     playClick();
-    showScreen('board');
+    showScreen('board', 'replace');
   }
   document.getElementById('btn-credits-skip').addEventListener('click', finishCredits);
+  document.getElementById('btn-credits-back').addEventListener('click', () => { playClick(); requestBack(); });
+  document.getElementById('btn-board-back').addEventListener('click', () => { playClick(); requestBack(); });
 
   document.getElementById('btn-open-display').addEventListener('click', () => {
     playClick();
@@ -271,10 +564,27 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   document.getElementById('btn-mute-start').addEventListener('click', toggleMute);
 
   // ===================== ССЫЛКА ДЛЯ УЧАСТНИКОВ (кнопки) =====================
-  const BUZZER_URL = location.href.split('#')[0].split('?')[0] + '?view=buzzer';
-  (function initBuzzerLink() {
+  // Телефоны не откроют localhost: если сервер знает адрес компьютера в сети, подставляем его.
+  function computeBuzzerUrl() {
+    const ips = (NET.info && Array.isArray(NET.info.ips)) ? NET.info.ips : [];
+    const ip = ips[0] || '';
+    const loc = location;
+    if (loc.protocol !== 'http:' && loc.protocol !== 'https:') {
+      return 'http://' + (ip || 'localhost') + ':' + ((NET.info && NET.info.port) || 3001) + '/?view=buzzer';
+    }
+    let host = loc.hostname;
+    if (ip && (host === 'localhost' || host === '127.0.0.1' || host === '[::1]')) host = ip;
+    return loc.protocol + '//' + host + (loc.port ? ':' + loc.port : '') + loc.pathname + '?view=buzzer';
+  }
+
+  let BUZZER_URL = computeBuzzerUrl();
+  function updateBuzzerLink() {
+    BUZZER_URL = computeBuzzerUrl();
     const a = document.getElementById('buzzer-link');
     if (a) { a.textContent = BUZZER_URL; a.href = BUZZER_URL; }
+  }
+  updateBuzzerLink();
+  (function initBuzzerLink() {
     const btn = document.getElementById('btn-copy-buzzer-link');
     if (!btn) return;
     btn.addEventListener('click', async () => {
@@ -287,6 +597,15 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
       setTimeout(() => { btn.textContent = '📋 Копировать'; }, 1800);
     });
   })();
+
+  // Связь с сервером: проверка раз в 3 с (заодно узнаём адрес для телефонов)
+  // и повторная отправка состояния, если сервер перезапускали.
+  NET.onUp.push(() => { broadcastState(); });
+  function pingServer() {
+    apiJson('/info', 'GET').then(d => { NET.info = d; updateBuzzerLink(); }).catch(() => {});
+  }
+  pingServer();
+  setInterval(pingServer, 3000);
 
   // ===================== BOARD RENDERING =====================
   function getRoundData() {
@@ -326,7 +645,6 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
       board.appendChild(row);
     });
 
-    document.getElementById('round-badge').textContent = `Раунд ${state.round}`;
     updateFinalRoundButton();
   }
 
@@ -398,7 +716,9 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   // ===================== QUESTION FLOW =====================
   function openQuestion(ci, qi, qKey, category, qData) {
     state.currentQuestion = { ...qData, category, qKey, ci, qi };
-    state.usedQuestions.add(qKey);
+    // Вопрос «сгорает» только после очков, показа ответа или «Готово» — иначе можно вернуться и выбрать другой
+    state.questionSpent = false;
+    state.leaveDone = false;
     state.answerRevealed = false;
 
     document.getElementById('question-price').textContent = qData.price;
@@ -430,26 +750,37 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
     showScreen('question');
   }
 
-  // Выход из вопроса на поле (общее для «← К полю» и «Готово»)
-  function leaveQuestion() {
+  // Выход из вопроса на поле: «← К полю» (done=false) и «Готово» (done=true).
+  // Сам переход делает doBack → finishLeaveQuestion, чтобы кнопка «Назад» браузера работала так же.
+  function leaveQuestion(done) {
+    state.leaveDone = !!done;
+    requestBack();
+  }
+
+  function finishLeaveQuestion() {
+    const q = state.currentQuestion;
+    if (q && q.qKey && (state.leaveDone || state.questionSpent)) state.usedQuestions.add(q.qKey);
+    state.leaveDone = false;
+    state.questionSpent = false;
     state.currentQuestion = null;
     state.answerRevealed = false;
     buzzControl('new');
     renderBoard();
     renderPlayersBar();
     checkRoundTransition();
-    showScreen('board');
+    showScreen('board', 'pop');
   }
 
   document.getElementById('btn-back-to-board').addEventListener('click', () => {
     playClick();
-    leaveQuestion();
+    leaveQuestion(false);
   });
 
   // Reveal answer to display (and show on host too)
   document.getElementById('btn-reveal-answer').addEventListener('click', () => {
     playClick();
     state.answerRevealed = true;
+    state.questionSpent = true;
     const q = state.currentQuestion;
     document.getElementById('answer-text').textContent = q.answer;
     document.getElementById('answer-section').style.display = 'block';
@@ -486,6 +817,7 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   }
 
   function adjustScore(playerIndex, amount, correct) {
+    if (state.phase === 'question') state.questionSpent = true;
     state.players[playerIndex].score += amount;
     flashEdge(correct);
     if (correct) playCorrect(); else playWrong();
@@ -496,7 +828,7 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
 
   document.getElementById('btn-question-done').addEventListener('click', () => {
     playClick();
-    leaveQuestion();
+    leaveQuestion(true);
   });
 
   // ===================== TIMER (только финальный раунд) =====================
@@ -689,11 +1021,42 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   });
 
   // ===================== FINAL ROUND =====================
-  function startFinalRound() {
-    stopBgMusic();
-    state.finalBets = state.players.map(() => 0);
-    state.finalAnswerRevealed = false;
+  let finalBuilt = false; // экран финала уже собран (при возврате назад не пересобираем — ставки не пропадут)
 
+  function startFinalRound() {
+    if (state.finalStarted && finalBuilt) {   // вернулись в начатый финал
+      showScreen('final');
+      return;
+    }
+    if (!state.finalStarted) {
+      stopBgMusic();
+      state.finalStarted = true;
+      state.finalShown = false;
+      state.finalBets = state.players.map(() => 0);
+      state.finalJudged = state.players.map(() => false);
+      state.finalAnswerRevealed = false;
+      stopTimer();
+      state.timer.max = 60;
+      state.timer.seconds = 60;
+      state.timer.running = false;
+    }
+    rebuildFinal();
+    showScreen('final');
+    startBgMusic();
+  }
+
+  function refreshFinalTimerButton() {
+    const b = document.getElementById('btn-final-timer-toggle');
+    if (!b) return;
+    if (state.timer.running) b.textContent = '⏸️ Пауза';
+    else if (state.timer.seconds <= 0) b.textContent = '⏱️ Время!';
+    else if (state.timer.seconds < state.timer.max) b.textContent = '⏱️ Продолжить';
+    else b.textContent = '⏱️ Старт';
+  }
+
+  // Собирает экран финала целиком из state (нужно и после перезагрузки страницы)
+  function rebuildFinal() {
+    finalBuilt = true;
     const container = document.getElementById('final-bet-inputs');
     container.innerHTML = '';
     state.players.forEach((player, i) => {
@@ -702,34 +1065,22 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
       row.innerHTML = `
         <label>${esc(player.name)}</label>
         <div class="score-hint">Очки: ${player.score}</div>
-        <input type="number" min="0" max="${Math.max(0, player.score)}" value="0" data-player="${i}" />
+        <input type="number" min="0" max="${Math.max(0, player.score)}" value="${state.finalBets[i] || 0}" data-player="${i}" />
       `;
       container.appendChild(row);
     });
 
-    document.getElementById('final-bets').style.display = 'block';
-    document.getElementById('final-question-section').style.display = 'none';
-    document.getElementById('final-answer-section').style.display = 'none';
-    document.getElementById('final-host-answer-text').textContent = '';
+    const betsEl = document.getElementById('final-bets');
+    const qSection = document.getElementById('final-question-section');
+    if (!state.finalShown) {
+      betsEl.style.display = 'block';
+      qSection.style.display = 'none';
+      return;
+    }
 
-    showScreen('final');
-    startBgMusic();
-  }
-
-  document.getElementById('btn-final-show-question').addEventListener('click', () => {
-    playClick();
-    const inputs = document.querySelectorAll('#final-bet-inputs input');
-    state.finalBets = Array.from(inputs).map((inp, i) => {
-      const val = parseInt(inp.value, 10) || 0;
-      return Math.min(val, Math.max(0, state.players[i].score));
-    });
-
-    // Set currentQuestion so display view syncs
     state.currentQuestion = { ...QUESTIONS.final, category: 'Финал', price: 0 };
-
     document.getElementById('final-question-text').textContent = QUESTIONS.final.question;
     document.getElementById('final-host-answer-text').textContent = QUESTIONS.final.answer;
-
     const imgWrap = document.getElementById('final-image-wrapper');
     const img = document.getElementById('final-image');
     if (QUESTIONS.final.image) {
@@ -738,45 +1089,68 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
     } else {
       imgWrap.style.display = 'none';
     }
+    betsEl.style.display = 'none';
+    qSection.style.display = 'block';
 
-    document.getElementById('final-bets').style.display = 'none';
-    document.getElementById('final-question-section').style.display = 'block';
+    document.getElementById('final-answer-text').textContent = state.finalAnswerRevealed ? QUESTIONS.final.answer : '';
+    document.getElementById('final-answer-section').style.display = state.finalAnswerRevealed ? 'block' : 'none';
+    document.getElementById('btn-final-reveal-answer').style.display = state.finalAnswerRevealed ? 'none' : '';
 
-    // Render final scoring
+    // Очки за финал: каждому можно начислить один раз (дальше — через «✏️ Баллы»)
     const scoringContainer = document.getElementById('final-scoring-players');
     scoringContainer.innerHTML = '';
     state.players.forEach((player, i) => {
       const bet = state.finalBets[i] || 0;
+      const judged = !!state.finalJudged[i];
       const row = document.createElement('div');
-      row.className = 'scoring-player-row';
+      row.className = 'scoring-player-row' + (judged ? ' judged' : '');
       row.innerHTML = `
         <div class="scoring-player-name">${esc(player.name)}</div>
-        <div style="font-size:var(--text-xs);color:var(--color-text-muted)">Ставка: ${bet}</div>
+        <div style="font-size:var(--text-xs);color:var(--color-text-muted)">Ставка: ${bet}${judged ? ' · учтено' : ''}</div>
         <div class="scoring-buttons">
-          <button class="score-btn minus" data-action="minus" data-player="${i}" aria-label="Неверно">−</button>
-          <button class="score-btn plus" data-action="plus" data-player="${i}" aria-label="Верно">+</button>
+          <button class="score-btn minus" data-action="minus" data-player="${i}" aria-label="Неверно"${judged ? ' disabled' : ''}>−</button>
+          <button class="score-btn plus" data-action="plus" data-player="${i}" aria-label="Верно"${judged ? ' disabled' : ''}>+</button>
         </div>
       `;
       scoringContainer.appendChild(row);
     });
-
     scoringContainer.querySelectorAll('.score-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const action = btn.dataset.action;
         const idx = parseInt(btn.dataset.player, 10);
+        if (state.finalJudged[idx]) return;
+        state.finalJudged[idx] = true;
+        const plus = btn.dataset.action === 'plus';
         const bet = state.finalBets[idx] || 0;
-        adjustScore(idx, action === 'plus' ? bet : -bet, action === 'plus');
+        const row = btn.closest('.scoring-player-row');
+        row.classList.add('judged');
+        row.querySelectorAll('.score-btn').forEach(b => { b.disabled = true; });
+        adjustScore(idx, plus ? bet : -bet, plus);
       });
     });
 
+    updateFinalTimerUI();
+    refreshFinalTimerButton();
+  }
+
+  document.getElementById('btn-final-show-question').addEventListener('click', () => {
+    playClick();
+    const inputs = document.querySelectorAll('#final-bet-inputs input');
+    state.finalBets = Array.from(inputs).map((inp, i) => {
+      const val = parseInt(inp.value, 10) || 0;
+      return Math.min(Math.max(0, val), Math.max(0, state.players[i].score));
+    });
+    state.finalShown = true;
+    state.finalJudged = state.players.map(() => false);
+    state.finalAnswerRevealed = false;
     stopTimer();
     state.timer.max = 60;
     state.timer.seconds = 60;
     state.timer.running = false;
-    updateFinalTimerUI();
-    document.getElementById('btn-final-timer-toggle').textContent = '⏱️ Старт';
+    rebuildFinal();
     broadcastState();
   });
+
+  document.getElementById('btn-final-back').addEventListener('click', () => { playClick(); requestBack(); });
 
   document.getElementById('btn-final-timer-toggle').addEventListener('click', () => {
     playClick();
@@ -837,7 +1211,7 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   });
 
   // ===================== RESULTS =====================
-  function showResults() {
+  function showResults(silent) {
     const sorted = [...state.players].map((p, i) => ({ ...p, index: i })).sort((a, b) => b.score - a.score);
     const top = sorted[0].score;
     const leaders = top > 0 ? sorted.filter(p => p.score === top) : [];
@@ -853,31 +1227,27 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
       list.appendChild(row);
     });
 
-    playRoundEnd();
+    if (!silent) playRoundEnd();
     showScreen('results');
   }
 
   document.getElementById('btn-play-again').addEventListener('click', () => {
     playClick();
-    state.players = [];
-    state.round = 1;
-    state.usedQuestions.clear();
-    state.currentQuestion = null;
-    state.finalBets = [];
-    state.answerRevealed = false;
-    state.finalAnswerRevealed = false;
-    stopTimer();
+    resetGameData();
     buzzControl('new');
     resetBuzzUI();
     startBgMusic();
-    showScreen('start');
+    showScreen('start', 'replace');
   });
+  document.getElementById('btn-results-back').addEventListener('click', () => { playClick(); requestBack(); });
 
   document.getElementById('btn-mute-game').addEventListener('click', toggleMute);
 
   // ===================== INIT =====================
   updateMuteButtons();
-  showScreen('start');
+  loadGame();
+  renderNetPill();
+  showScreen('start', 'replace');
 
 
   // ==================================================================
@@ -891,7 +1261,6 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
     const nameEl = document.getElementById('buzzer-name');
     const btn = document.getElementById('buzzer-btn');
     const statusEl = document.getElementById('buzzer-status');
-    const connEl = document.getElementById('buzzer-conn');
 
     let me = null;
     let net = { open: false, winner: null, locked: [] };
@@ -995,11 +1364,8 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
       const myEpoch = epoch;
       try {
         const d = await apiJson('/buzz', 'GET');
-        connEl.style.display = 'none';
         if (myEpoch === epoch && !sending) applyNet(d);
-      } catch (e) {
-        connEl.style.display = 'block';
-      }
+      } catch (e) { /* плашку покажет renderNetPill */ }
     }
     setInterval(poll, 250);
     poll();
@@ -1019,8 +1385,6 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
   // DISPLAY VIEW LOGIC (projector)
   // ==================================================================
   function initDisplay() {
-    const SYNC_URL_DISP = SYNC_BASE + '/state';
-
     // До первого сообщения от ведущего показываем стартовый экран
     let displayState = {
       type: 'sync',
@@ -1036,21 +1400,12 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
       buzz: { open: false, winner: null, locked: [] },
     };
 
-    // Индикатор связи: красная плашка, если сервер недоступен
-    let failCount = 0;
+    // Связь с сервером и красная плашка — в общем модуле (apiJson / renderNetPill)
     let lastJson = '';
-    function setConn(ok) {
-      const el = document.getElementById('display-conn');
-      if (el) el.style.display = ok ? 'none' : 'block';
-    }
 
     async function fetchState() {
       try {
-        const resp = await fetch(SYNC_URL_DISP, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-        failCount = 0;
-        setConn(true);
+        const data = await apiJson('/state', 'GET');
         if (data && data.phase) {
           const json = JSON.stringify(data);
           if (json !== lastJson) {
@@ -1059,10 +1414,7 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
             renderDisplay();
           }
         }
-      } catch (e) {
-        failCount++;
-        if (failCount >= 3) setConn(false);
-      }
+      } catch (e) { /* плашку покажет renderNetPill */ }
     }
 
     // Initial fetch
@@ -1127,7 +1479,6 @@ const SYNC_BASE = 'port/3001'.startsWith('__') ? 'http://localhost:3001' : 'port
         board.appendChild(row);
       });
 
-      document.getElementById('display-round-badge').textContent = `Раунд ${displayState.round}`;
       renderDisplayPlayersBar('display-players-bar');
     }
 

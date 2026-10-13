@@ -42,6 +42,7 @@
       <h1 class="game-title">Своя игра</h1>
       <p class="game-subtitle">🦕 Динозаврики зовут играть! 🦖</p>
       <div class="host-start-buttons">
+        <button id="btn-continue" class="btn btn-primary btn-large" type="button" style="display:none;">▶ Продолжить игру</button>
         <button id="btn-start" class="btn btn-primary btn-large">Начать игру</button>
         <button id="btn-open-display" class="btn btn-ghost">🖥️ Открыть экран проектора</button>
       </div>
@@ -51,6 +52,7 @@
         </button>
       </div>
       <div class="buzzer-link-box">
+        <div id="server-status" class="server-status">Проверяю связь с сервером…</div>
         <div class="buzzer-link-label">🔔 Ссылка для участников (кнопки на телефонах):</div>
         <a id="buzzer-link" class="buzzer-link" href="#" target="_blank" rel="noopener"></a>
         <button id="btn-copy-buzzer-link" class="btn btn-ghost btn-sm" type="button">📋 Копировать</button>
@@ -63,6 +65,7 @@
     <div id="credits-viewport" class="credits-viewport">
       <div id="credits-roll" class="credits-roll"></div>
     </div>
+    <button id="btn-credits-back" class="btn btn-ghost credits-skip credits-back" type="button">← Назад</button>
     <button id="btn-credits-skip" class="btn btn-ghost credits-skip">Пропустить →</button>
   </div>
 
@@ -70,8 +73,8 @@
   <div id="screen-board" class="screen">
     <header class="board-header">
       <div class="header-left">
+        <button id="btn-board-back" class="btn btn-ghost btn-sm" type="button">← Меню</button>
         <span class="brand-tag small">#МПКомитет</span>
-        <span class="round-badge" id="round-badge">Раунд 1</span>
       </div>
       <div class="header-right">
         <button id="btn-final-round" class="btn btn-accent btn-sm" style="display:none;">Финальный раунд</button>
@@ -148,6 +151,7 @@
   <div id="screen-final" class="screen">
     <div class="final-container">
       <div class="final-header">
+        <button id="btn-final-back" class="btn btn-ghost btn-sm final-back" type="button">← К полю</button>
         <div class="brand-tag small">#МПКомитет</div>
         <h2 class="final-title">🎬 Финальный раунд</h2>
       </div>
@@ -207,6 +211,7 @@
       <div id="winner-name" class="winner-name"></div>
       <div id="results-list" class="results-list"></div>
       <button id="btn-play-again" class="btn btn-primary btn-large">Играть снова</button>
+      <button id="btn-results-back" class="btn btn-ghost" type="button">← Назад к финалу</button>
     </div>
   </div>
 
@@ -237,7 +242,6 @@
     <div id="display-board-screen" class="display-screen">
       <header class="display-header">
         <span class="brand-tag small">#МПКомитет</span>
-        <span class="round-badge" id="display-round-badge">Раунд 1</span>
       </header>
       <div id="display-board" class="display-board"></div>
       <div id="display-players-bar" class="display-players-bar"></div>
@@ -284,12 +288,8 @@
     </div>
   </div>
 
-  <div id="display-conn" class="display-conn" style="display:none;">⚠ Нет связи с сервером</div>
-
   <!-- ==================== BUZZER VIEW (телефон участника) ==================== -->
   <div id="buzzer-view" class="buzzer-view" style="display:none;">
-    <div id="buzzer-conn" class="buzzer-conn" style="display:none;">Нет связи с сервером…</div>
-
     <div id="buzzer-pick" class="buzzer-pick">
       <div class="brand-tag small">#МПКомитет</div>
       <h2 class="section-title">Кто вы?</h2>
