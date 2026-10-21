@@ -113,9 +113,14 @@
         <div class="host-answer-panel" id="host-answer-panel">
           <div class="host-answer-label">Ответ (виден только вам):</div>
           <div class="host-answer-text" id="host-answer-text"></div>
+          <div class="question-image-wrapper host-answer-image" id="host-answer-image-wrapper" style="display:none;">
+            <img id="host-answer-image" class="question-image" alt="" />
+          </div>
           <button id="btn-reveal-answer" class="btn btn-accent">👁️ Показать ответ игрокам</button>
         </div>
       </div>
+
+      <div id="image-hint" class="image-hint" style="display:none;"></div>
 
       <div class="answer-section display-answer-section" id="answer-section" style="display:none;">
         <div class="answer-label">Ответ (на проекторе):</div>
@@ -262,6 +267,9 @@
       <div class="display-answer-reveal" id="display-answer-reveal" style="display:none;">
         <div class="display-answer-label">Ответ:</div>
         <div class="display-answer-text" id="display-answer-text"></div>
+        <div class="display-question-image-wrapper" id="display-answer-image-wrapper" style="display:none;">
+          <img id="display-answer-image" class="display-question-image" alt="" />
+        </div>
       </div>
       <div class="display-buzz" id="display-buzz"></div>
       <div id="display-players-bar-question" class="display-players-bar"></div>

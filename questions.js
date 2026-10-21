@@ -1,57 +1,68 @@
 // Тестовые вопросы для «Своей игры»
 // Замените эти вопросы на реальные позже.
-// Формат: { price, question, answer, image (null или URL) }
+// Формат: { price, question, answer, image }
+// image: null — без фото; 'images/1.1' — фото images/1.1.jpg (или .png/.jpeg/.webp).
+//   Название фото: <номер категории>.<номер вопроса>, например 1.1, 1.2 … 2.1, 2.2 (последний вопрос категории — без фото).
+//   Если файла нет, фото просто не показывается.
+// answerImage: фото, которое показывается вместе с ответом (у ведущего — сразу, на проекторе — после «Показать ответ»).
+//   Фото ищется в папке images или рядом с index.html.
+// Варианты ответов пишите прямо в тексте вопроса, с новой строки (\n).
 
 const QUESTIONS = {
   round1: [
     {
-      category: "Динозавры",
+      category: "В мире юрского периода",
       questions: [
-        { price: 100, question: "Какой динозавр имел три рога на голове?", answer: "Трицератопс", image: null },
-        { price: 200, question: "Как назывался период, в который жили динозавры?", answer: "Мезозойская эра", image: null },
-        { price: 300, question: "Какой динозавр считался самым крупным хищником?", answer: "Тираннозавр рекс", image: null },
-        { price: 400, question: "Что означает слово «динозавр» в переводе с греческого?", answer: "Ужасный ящер", image: null },
-        { price: 500, question: "Какой динозавр имел длинную шею и был одним из крупнейших?", answer: "Диплодок", image: null },
+        { price: 200, question: "Кто с точки зрения современной науки является прямым потомком динозавров и их единственным выжившим видом?\n\nа) Крокодилы\nб) Птицы\nв) Ящерицы\nг) Млекопитающие", answer: "б) Птицы", image: null, answerImage: "images/1.1" },
+        { price: 404, question: "Что за динозавр засветился на фотокарточке?\n\nа) Аллозавр\nб) Овираптор\nв) Карнотавр\nг) Цератозавр", answer: "в) Карнотавр", image: "images/1.2" },
+        { price: 607, question: "У какого динозавра был мозг с сосиску/лайм?\n\nа) Трицератопс\nб) Анкилозавр\nв) Брахиозавр\nг) Стегозавр", answer: "г) Стегозавр", image: "images/1.3" },
+        { price: 777, question: "Футболка с каким принтом стала главным мемом лета 2021 года?", answer: "Пивозавр", image: null, answerImage: "images/1.4" },
+        { price: 869, question: "Если бы гадрозавр держал район, его бы кличкой было: «Самый зубастый». Сколько зубов было у гадрозавра?", answer: "Более 980 зубов — он постоянно отращивал новые взамен изношенных.", image: "images/1.5" },
+        { price: 1007, question: "В середине XX века в научных кругах и музеях мира прочно укоренилось мнение, что самым крупным динозавром был Ультразавр (длиной до 30 метров). Однако позже выяснилось, что это была ошибка палеонтологов. В чем именно она заключалась?\n\nа) Это был скелет детёныша, который вырос бы ещё больше\nб) Кости оказались окаменевшими стволами деревьев\nв) Останки принадлежали сразу нескольким разным динозаврам\nг) Ультразавр оказался морской рептилией, а не динозавром", answer: "в) Останки принадлежали сразу нескольким разным динозаврам", image: null },
       ],
     },
     {
-      category: "История",
+      category: "676-767 млн лет",
       questions: [
-        { price: 100, question: "В каком году началась Великая Отечественная война?", answer: "1941", image: null },
-        { price: 200, question: "Кто был первым человеком в космосе?", answer: "Юрий Гагарин", image: null },
-        { price: 300, question: "Какой город был столицей Древнего Рима?", answer: "Рим", image: null },
-        { price: 400, question: "Кто построил Великую Китайскую стену?", answer: "Китайские императоры (династия Цинь)", image: null },
-        { price: 500, question: "В каком году распался СССР?", answer: "1991", image: null },
+        { price: 200, question: "Вопрос 2.1 — впишите текст в questions.js", answer: "—", image: "images/2.1" },
+        { price: 404, question: "Вопрос 2.2 — впишите текст в questions.js", answer: "—", image: "images/2.2" },
+        { price: 607, question: "Вопрос 2.3 — впишите текст в questions.js", answer: "—", image: "images/2.3" },
+        { price: 777, question: "Вопрос 2.4 — впишите текст в questions.js", answer: "—", image: "images/2.4" },
+        { price: 869, question: "Вопрос 2.5 — впишите текст в questions.js", answer: "—", image: "images/2.5" },
+        { price: 1007, question: "Вопрос 2.6 — впишите текст в questions.js", answer: "—", image: null },
       ],
     },
     {
-      category: "Кино",
+      category: "ХЗ",
       questions: [
-        { price: 100, question: "Назовите режиссёра фильма «Титаник».", answer: "Джеймс Кэмерон", image: null },
-        { price: 200, question: "Какой фильм получил больше всего «Оскаров»?", answer: "Бен-Гур / Титаник / Властелин колец (по 11)", image: null },
-        { price: 300, question: "Кто сыграл Джокера в «Тёмном рыцаре»?", answer: "Хит Леджер", image: null },
-        { price: 400, question: "В каком году вышел первый «Звёздные войны»?", answer: "1977", image: null },
-        { price: 500, question: "Назовите самый кассовый фильм всех времён (на 2023 год).", answer: "Аватар", image: null },
+        { price: 200, question: "Вопрос 3.1 — впишите текст в questions.js", answer: "—", image: "images/3.1" },
+        { price: 404, question: "Вопрос 3.2 — впишите текст в questions.js", answer: "—", image: "images/3.2" },
+        { price: 607, question: "Вопрос 3.3 — впишите текст в questions.js", answer: "—", image: "images/3.3" },
+        { price: 777, question: "Вопрос 3.4 — впишите текст в questions.js", answer: "—", image: "images/3.4" },
+        { price: 869, question: "Вопрос 3.5 — впишите текст в questions.js", answer: "—", image: "images/3.5" },
+        { price: 1007, question: "Вопрос 3.6 — впишите текст в questions.js", answer: "—", image: null },
       ],
     },
     {
-      category: "Наука",
+      category: "Интересный факт динозаврика",
       questions: [
-        { price: 100, question: "Сколько планет в Солнечной системе?", answer: "8", image: null },
-        { price: 200, question: "Какой химический элемент обозначается символом O?", answer: "Кислород", image: null },
-        { price: 300, question: "Кто сформулировал теорию относительности?", answer: "Альберт Эйнштейн", image: null },
-        { price: 400, question: "Какая частица переносит электрический заряд в металлах?", answer: "Электрон", image: null },
-        { price: 500, question: "Чему равна скорость света в вакууме (приблизительно)?", answer: "300 000 км/с", image: null },
+        { price: 200, question: "Вопрос 4.1 — впишите текст в questions.js", answer: "—", image: "images/4.1" },
+        { price: 404, question: "Вопрос 4.2 — впишите текст в questions.js", answer: "—", image: "images/4.2" },
+        { price: 607, question: "Вопрос 4.3 — впишите текст в questions.js", answer: "—", image: "images/4.3" },
+        { price: 777, question: "Вопрос 4.4 — впишите текст в questions.js", answer: "—", image: "images/4.4" },
+        { price: 869, question: "Вопрос 4.5 — впишите текст в questions.js", answer: "—", image: "images/4.5" },
+        { price: 1007, question: "Вопрос 4.6 — впишите текст в questions.js", answer: "—", image: null },
       ],
     },
     {
-      category: "География",
+      category: "Газозавр",
       questions: [
-        { price: 100, question: "Какая самая длинная река в мире?", answer: "Нил (или Амазонка)", image: null },
-        { price: 200, question: "Столица Австралии?", answer: "Канберра", image: null },
-        { price: 300, question: "В какой стране находится гора Эверест?", answer: "Непал (и Китай)", image: null },
-        { price: 400, question: "Какое самое глубокое озеро в мире?", answer: "Байкал", image: null },
-        { price: 500, question: "Какая пустыня самая большая в мире?", answer: "Сахара (холодная: Антарктида)", image: null },
+        { price: 200, question: "Вопрос 5.1 — впишите текст в questions.js", answer: "—", image: "images/5.1" },
+        { price: 404, question: "Вопрос 5.2 — впишите текст в questions.js", answer: "—", image: "images/5.2" },
+        { price: 607, question: "Вопрос 5.3 — впишите текст в questions.js", answer: "—", image: "images/5.3" },
+        { price: 777, question: "Вопрос 5.4 — впишите текст в questions.js", answer: "—", image: "images/5.4" },
+        { price: 869, question: "Вопрос 5.5 — впишите текст в questions.js", answer: "—", image: "images/5.5" },
+        { price: 1007, question: "Вопрос 5.6 — впишите текст в questions.js", answer: "—", image: null },
       ],
     },
   ],

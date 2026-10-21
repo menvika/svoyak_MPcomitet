@@ -2,13 +2,38 @@
    СВОЯ ИГРА — Game Logic (Dual-View: Host + Projector Display)
    #МПКомитет
    =================================================================== */
-// ===================== НАСТРОЙКИ (меняет только владелец) =====================
 // Имена игроков. Порядок важен: он же порядок кнопок у участников.
 const PLAYER_NAMES = ['Ксюша', 'Мила', 'Денис', 'Юля', 'Катя'];
 // Скорость бегущей строки с категориями (пикселей в секунду)
 const CREDITS_SPEED = 110;
 // Снимать очки, если нажавший первым ответил неверно (как в телеигре)
 const PENALTY_ON_WRONG = true;
+// ===================== ФОТО К ВОПРОСАМ =====================
+// image: 'images/1.1' → ищем images/1.1.jpg, .png, .jpeg, .webp … и такой же файл рядом с index.html.
+// Если файла нет — фото не показываем (onMissing сообщает, что искали).
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'JPG', 'JPEG', 'PNG', 'WEBP', 'jfif'];
+function imageCandidates(src) {
+  if (/\.(jpe?g|png|webp|gif|svg|jfif)$/i.test(src) || /^(https?:|data:)/i.test(src)) return [src];
+  const name = src.replace(/^images?\//, '');
+  const list = [];
+  ['image/', 'images/', ''].forEach(dir => IMAGE_EXTS.forEach(e => list.push(dir + name + '.' + e)));
+  return list;
+}
+function loadQuestionImage(img, wrap, src, onMissing) {
+  img.onload = null; img.onerror = null;
+  if (!src) { wrap.style.display = 'none'; img.removeAttribute('src'); return; }
+  const list = imageCandidates(src);
+  let i = 0;
+  wrap.style.display = 'none';
+  img.onload = () => { wrap.style.display = 'block'; };
+  img.onerror = () => {
+    i++;
+    if (i < list.length) img.src = list[i];
+    else { wrap.style.display = 'none'; img.removeAttribute('src'); if (onMissing) onMissing(src); }
+  };
+  img.src = list[0];
+}
+
 // ===================== СВЯЗЬ С СЕРВЕРОМ =====================
 // Игра сама ищет сервер (node server.js, порт 3001) по списку адресов:
 //   1) тот же адрес, с которого открыта страница (если сайт отдаёт сам server.js)
@@ -136,7 +161,7 @@ async function apiJson(path, method, body) {
   // ===================== VIEW MODE =====================
   const VIEW = new URLSearchParams(location.search).get('view') || 'host'; // 'host' | 'display'
 
-  const ROUND1_PRICES = [100, 200, 300, 400, 500];
+  const ROUND1_PRICES = [200, 404, 607, 777, 869, 1007];
   const ROUND2_PRICES = [200, 400, 600, 800, 1000];
   const ROUND3_PRICES = [300, 600, 900, 1200, 1500];
 
@@ -194,6 +219,7 @@ async function apiJson(path, method, body) {
         price: state.currentQuestion.price,
         question: state.currentQuestion.question,
         image: state.currentQuestion.image,
+        answerImage: state.answerRevealed ? (state.currentQuestion.answerImage || null) : null,
         answer: state.answerRevealed ? state.currentQuestion.answer : null,
       } : null,
       answerRevealed: state.answerRevealed,
@@ -620,6 +646,7 @@ async function apiJson(path, method, body) {
     const board = document.getElementById('board');
     const data = getRoundData();
     board.innerHTML = '';
+    board.style.setProperty('--cols', Math.max(...data.map(c => c.questions.length)));
 
     data.forEach((cat, ci) => {
       const row = document.createElement('div');
@@ -730,13 +757,16 @@ async function apiJson(path, method, body) {
 
     const imgWrap = document.getElementById('question-image-wrapper');
     const img = document.getElementById('question-image');
-    if (qData.image) {
-      img.src = qData.image;
-      imgWrap.style.display = 'block';
-    } else {
-      imgWrap.style.display = 'none';
-      img.src = '';
-    }
+    const hint = document.getElementById('image-hint');
+    const missing = [];
+    const onMissing = src => {
+      missing.push(src.replace(/^images\//, ''));
+      hint.textContent = '📷 Фото не найдено: положите файл ' + missing.join(' и ') + ' (jpg/png) в папку image (или images) рядом с index.html';
+      hint.style.display = 'block';
+    };
+    hint.style.display = 'none';
+    loadQuestionImage(img, imgWrap, qData.image, onMissing);
+    loadQuestionImage(document.getElementById('host-answer-image'), document.getElementById('host-answer-image-wrapper'), qData.answerImage, onMissing);
 
     // Hide display answer section
     document.getElementById('answer-section').style.display = 'none';
@@ -1458,6 +1488,7 @@ async function apiJson(path, method, body) {
     function renderDisplayBoard() {
       const board = document.getElementById('display-board');
       const data = displayState.round === 1 ? QUESTIONS.round1 : displayState.round === 2 ? QUESTIONS.round2 : QUESTIONS.round3;
+      board.style.setProperty('--cols', Math.max(...data.map(c => c.questions.length)));
       const prices = displayState.round === 1 ? ROUND1_PRICES : displayState.round === 2 ? ROUND2_PRICES : ROUND3_PRICES;
       board.innerHTML = '';
 
@@ -1489,20 +1520,29 @@ async function apiJson(path, method, body) {
       document.getElementById('display-question-price').textContent = q.price;
       document.getElementById('display-question-category').textContent = q.category;
       document.getElementById('display-question-text').textContent = q.question;
+      // Длинные вопросы с вариантами ответов должны помещаться на экран проектора
+      const qText = String(q.question || '');
+      const qLoad = qText.length + 45 * (qText.split('\n').length - 1) + (q.image ? 150 : 0);
+      document.getElementById('display-question-text').style.fontSize =
+        qLoad > 380 ? 'clamp(1rem, 1.9vw, 1.9rem)' : qLoad > 200 ? 'clamp(1.2rem, 2.3vw, 2.3rem)' : '';
 
       const imgWrap = document.getElementById('display-question-image-wrapper');
       const img = document.getElementById('display-question-image');
-      if (q.image) {
-        img.src = q.image;
-        imgWrap.style.display = 'block';
-      } else {
-        imgWrap.style.display = 'none';
+      // Фото перезагружаем только при смене вопроса (состояние приходит каждые 250 мс)
+      if (img.dataset.src !== String(q.image || '')) {
+        img.dataset.src = String(q.image || '');
+        loadQuestionImage(img, imgWrap, q.image);
       }
 
       // Only show answer if revealed
       const answerReveal = document.getElementById('display-answer-reveal');
       if (displayState.answerRevealed && q.answer) {
         document.getElementById('display-answer-text').textContent = q.answer;
+        const aImg = document.getElementById('display-answer-image');
+        if (aImg.dataset.src !== String(q.answerImage || '')) {
+          aImg.dataset.src = String(q.answerImage || '');
+          loadQuestionImage(aImg, document.getElementById('display-answer-image-wrapper'), q.answerImage);
+        }
         answerReveal.style.display = 'block';
       } else {
         answerReveal.style.display = 'none';

@@ -326,7 +326,7 @@ img { display: block; max-width: 100%; height: auto; }
 
 .board-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1.1fr) repeat(5, 1fr);
+  grid-template-columns: minmax(120px, 1.1fr) repeat(var(--cols, 5), 1fr);
   gap: var(--space-2);
 }
 
@@ -711,7 +711,7 @@ img { display: block; max-width: 100%; height: auto; }
 
 /* ===================== RESPONSIVE ===================== */
 @media (max-width: 900px) {
-  .board-row { grid-template-columns: minmax(90px, 0.9fr) repeat(5, 1fr); }
+  .board-row { grid-template-columns: minmax(90px, 0.9fr) repeat(var(--cols, 5), 1fr); }
   .category-cell { font-size: var(--text-xs); min-height: 46px; padding: var(--space-1) var(--space-2); }
   .price-cell { min-height: 46px; font-size: var(--text-base); }
   .players-bar { grid-template-columns: repeat(5, 1fr); gap: var(--space-2); }
@@ -719,7 +719,7 @@ img { display: block; max-width: 100%; height: auto; }
 }
 
 @media (max-width: 640px) {
-  .board-row { grid-template-columns: minmax(70px, 0.85fr) repeat(5, 1fr); gap: var(--space-1); }
+  .board-row { grid-template-columns: minmax(70px, 0.85fr) repeat(var(--cols, 5), 1fr); gap: var(--space-1); }
   .board { gap: var(--space-1); padding: var(--space-2); }
   .category-cell { font-size: 0.62rem; min-height: 40px; padding: 2px var(--space-1); line-height: 1.1; }
   .price-cell { min-height: 40px; font-size: var(--text-sm); border-radius: var(--radius-sm); }
@@ -856,7 +856,7 @@ img { display: block; max-width: 100%; height: auto; }
 
 .display-board .board-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) repeat(5, 1fr);
+  grid-template-columns: minmax(160px, 1.2fr) repeat(var(--cols, 5), 1fr);
   gap: var(--space-3);
 }
 
@@ -1091,7 +1091,7 @@ img { display: block; max-width: 100%; height: auto; }
 @media (max-width: 640px) {
   .host-question-body { gap: var(--space-3); }
   .host-answer-text { font-size: var(--text-base); }
-  .display-board .board-row { grid-template-columns: minmax(80px, 0.8fr) repeat(5, 1fr); gap: var(--space-1); }
+  .display-board .board-row { grid-template-columns: minmax(80px, 0.8fr) repeat(var(--cols, 5), 1fr); gap: var(--space-1); }
   .display-board .category-cell { min-height: 48px; font-size: var(--text-xs); }
   .display-board .price-cell { min-height: 48px; font-size: var(--text-lg); }
   .display-question-card { padding: var(--space-6) var(--space-4); min-height: 200px; }
@@ -1443,3 +1443,16 @@ img { display: block; max-width: 100%; height: auto; }
 .scoring-player-row.judged { opacity: 0.6; }
 .score-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 #btn-results-back { margin-top: var(--space-3); }
+
+/* Тексты вопросов с вариантами ответов (перенос строк как в questions.js) */
+.question-text, .display-question-text, .host-answer-text, .answer-text, .display-answer-text { white-space: pre-line; }
+.board-row .price-cell { min-width: 0; }
+
+/* Фото на проекторе не должно вытеснять текст вопроса */
+.display-question-image-wrapper { max-width: 100%; display: flex; justify-content: center; }
+.display-question-image { width: auto; max-width: 100%; max-height: 28vh; object-fit: contain; }
+.display-question-image { max-height: 22vh; }
+.question-image { max-height: 30vh; width: auto; max-width: 100%; object-fit: contain; display: block; margin: 0 auto; }
+
+.image-hint { background: #fff4d6; color: #7a5200; border: 1px dashed #e0b040; border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); margin: var(--space-2) 0; }
+.host-answer-image { margin-top: var(--space-3); }
