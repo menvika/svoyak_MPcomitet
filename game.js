@@ -247,7 +247,7 @@ async function apiJson(path, method, body) {
       { data: QUESTIONS.round2 },
       { data: QUESTIONS.round3 },
     ];
-    let html = '<div class="credits-title">Своя игра</div>';
+    let html = '<div class="credits-title">СинтарСус</div>';
     rounds.forEach(r => {
       r.data.forEach(cat => {
         html += `<div class="credits-category">${esc(cat.category)}</div>`;
