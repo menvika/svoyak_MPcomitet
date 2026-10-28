@@ -16,14 +16,26 @@ const MIME = {
 };
 
 function lanAddresses() {
-  const out = [];
+  // Собираем адреса компьютера в сети и ставим «настоящий» Wi-Fi/LAN адрес первым,
+  // а адреса виртуальных адаптеров (VirtualBox, WSL, Docker, VPN) — в конец.
+  const found = [];
   const nets = os.networkInterfaces();
   Object.keys(nets).forEach(name => {
     (nets[name] || []).forEach(n => {
-      if (n.family === 'IPv4' && !n.internal) out.push(n.address);
+      if (n.family !== 'IPv4' || n.internal) return;
+      const a = n.address;
+      let rank = 5;
+      if (/^192\.168\./.test(a)) rank = 0;
+      else if (/^10\./.test(a)) rank = 1;
+      else if (/^172\.(1[6-9]|2\d|3[01])\./.test(a)) rank = 2;
+      if (/^192\.168\.(56|99|137|203)\./.test(a)) rank += 3;          // VirtualBox / VMware
+      if (/virtual|vbox|vmware|vethernet|wsl|docker|hyper-v|hamachi|radmin|tailscale|zerotier|vpn|tap|tun/i.test(name)) rank += 6;
+      if (/^169\.254\./.test(a)) rank = 20;                              // адрес «без сети»
+      found.push({ a, rank });
     });
   });
-  return out;
+  found.sort((x, y) => x.rank - y.rank);
+  return found.map(f => f.a);
 }
 
 function serveStatic(url, res) {

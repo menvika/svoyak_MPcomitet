@@ -9,7 +9,7 @@ const CREDITS_SPEED = 110;
 // Снимать очки, если нажавший первым ответил неверно (как в телеигре)
 const PENALTY_ON_WRONG = true;
 // ===================== ФОТО К ВОПРОСАМ =====================
-// image: 'images/1.1' → ищем images/1.1.jpg, .png, .jpeg, .webp … и такой же файл рядом с index.html.
+// Фото лежат в image/<раунд>/<тема>.<вопрос>.jpg (или .png/.jpeg/.webp), например image/1/2.3.jpg.
 // Если файла нет — фото не показываем (onMissing сообщает, что искали).
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'JPG', 'JPEG', 'PNG', 'WEBP', 'jfif'];
 function imageCandidates(src) {
@@ -401,7 +401,6 @@ async function apiJson(path, method, body) {
         break;
       case 'final':
         stopTimer();
-        refreshFinalTimerButton();
         renderBoard();
         renderPlayersBar();
         showScreen('board', 'pop');
@@ -608,6 +607,15 @@ async function apiJson(path, method, body) {
     BUZZER_URL = computeBuzzerUrl();
     const a = document.getElementById('buzzer-link');
     if (a) { a.textContent = BUZZER_URL; a.href = BUZZER_URL; }
+    const alt = document.getElementById('buzzer-alt');
+    if (alt) {
+      const ips = (NET.info && Array.isArray(NET.info.ips)) ? NET.info.ips : [];
+      const port = (NET.info && NET.info.port) || 3001;
+      const others = ips.slice(1).map(ip => 'http://' + ip + ':' + port + '/?view=buzzer');
+      alt.innerHTML = others.length
+        ? 'Если на телефоне не открывается, попробуйте другой адрес: ' + others.map(u => '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>').join(' · ')
+        : '';
+    }
   }
   updateBuzzerLink();
   (function initBuzzerLink() {
@@ -741,8 +749,11 @@ async function apiJson(path, method, body) {
   }
 
   // ===================== QUESTION FLOW =====================
+  const BUZZ_AUTO_OPEN_MS = 3000;
+  let buzzAutoTimer = null;
   function openQuestion(ci, qi, qKey, category, qData) {
     state.currentQuestion = { ...qData, category, qKey, ci, qi };
+    modifierTriggeredFor = null;
     // Вопрос «сгорает» только после очков, показа ответа или «Готово» — иначе можно вернуться и выбрать другой
     state.questionSpent = false;
     state.leaveDone = false;
@@ -760,12 +771,13 @@ async function apiJson(path, method, body) {
     const hint = document.getElementById('image-hint');
     const missing = [];
     const onMissing = src => {
-      missing.push(src.replace(/^images\//, ''));
-      hint.textContent = '📷 Фото не найдено: положите файл ' + missing.join(' и ') + ' (jpg/png) в папку image (или images) рядом с index.html';
+      missing.push(src.replace(/^images?\//, ''));
+      hint.textContent = 'Фото не найдено: положите файл ' + missing.join(' и ') + ' (jpg/png) в папку image';
       hint.style.display = 'block';
     };
     hint.style.display = 'none';
-    loadQuestionImage(img, imgWrap, qData.image, onMissing);
+    // автоподобранные фото (image/<раунд>/<тема>.<вопрос>) молчат, если файла нет
+    loadQuestionImage(img, imgWrap, qData.image, qData.autoImage ? null : onMissing);
     loadQuestionImage(document.getElementById('host-answer-image'), document.getElementById('host-answer-image-wrapper'), qData.answerImage, onMissing);
 
     // Hide display answer section
@@ -778,6 +790,19 @@ async function apiJson(path, method, body) {
     buzzControl('new'); // сбросить кнопки участников для нового вопроса
     resetBuzzUI();
     showScreen('question');
+    const questionCard = document.querySelector('.question-card');
+    if (questionCard) {
+      questionCard.classList.remove('question-pass-animation', 'question-modifier-animation');
+      void questionCard.offsetWidth;
+      questionCard.classList.toggle('question-pass-animation', !!qData.passQuestion);
+      questionCard.classList.toggle('question-modifier-animation', !!qData.modifier);
+    }
+    // кнопки у участников открываются сами через 3 секунды после показа вопроса
+    clearTimeout(buzzAutoTimer);
+    const openedFor = state.currentQuestion;
+    buzzAutoTimer = setTimeout(() => {
+      if (state.phase === 'question' && state.currentQuestion === openedFor && !buzz.open && buzz.winner === null) buzzControl('open');
+    }, BUZZ_AUTO_OPEN_MS);
   }
 
   // Выход из вопроса на поле: «← К полю» (done=false) и «Готово» (done=true).
@@ -788,6 +813,7 @@ async function apiJson(path, method, body) {
   }
 
   function finishLeaveQuestion() {
+    clearTimeout(buzzAutoTimer);
     const q = state.currentQuestion;
     if (q && q.qKey && (state.leaveDone || state.questionSpent)) state.usedQuestions.add(q.qKey);
     state.leaveDone = false;
@@ -871,6 +897,7 @@ async function apiJson(path, method, body) {
   // Состояние кнопок живёт на сервере (кто нажал первым решает порядок прихода
   // запросов). Здесь — его копия для панели ведущего.
   const buzz = { open: false, winner: null, locked: [], online: true, key: '', judged: false };
+  let modifierTriggeredFor = null;
   let buzzEpoch = 0; // чтобы запоздавший опрос не затирал свежий ответ на команду
 
   function playBuzzSound() {
@@ -887,8 +914,68 @@ async function apiJson(path, method, body) {
     buzz.online = true;
     const key = d.round + ':' + buzz.winner;
     if (key !== buzz.key) { buzz.key = key; buzz.judged = false; }
-    if (buzz.winner !== null && prevWinner === null && state.phase === 'question') playBuzzSound();
+    if (buzz.winner !== null && prevWinner === null && state.phase === 'question') {
+      playBuzzSound();
+      const q = state.currentQuestion;
+      if (q && q.modifier && modifierTriggeredFor !== q.qKey) {
+        modifierTriggeredFor = q.qKey;
+        executeModifierForPlayer(buzz.winner, q);
+      }
+    }
     renderBuzzPanel();
+  }
+
+  // Модификаторы применяются автоматически к игроку, который нажал первым.
+  function executeModifierForPlayer(playerIndex, q) {
+    if (!state.players[playerIndex]) return;
+    const instruction = String(q.answer || '').toLocaleLowerCase('ru');
+    const player = state.players[playerIndex];
+    let message = '';
+    if (instruction.includes('плюс на минус')) {
+      player.score -= Number(q.price || 0);
+      message = `${player.name}: модификатор «Плюс на минус» — ${q.price} баллов снято.`;
+    } else if (instruction.includes('забери 1000 баллов')) {
+      const leaderScore = Math.max(...state.players.map(p => p.score));
+      const leaderIndex = state.players.findIndex(p => p.score === leaderScore);
+      const lowestScore = Math.min(...state.players.map(p => p.score));
+      const lowestIndex = state.players.findIndex(p => p.score === lowestScore);
+      const fromIndex = leaderIndex;
+      const toIndex = playerIndex === leaderIndex ? lowestIndex : playerIndex;
+      if (fromIndex === toIndex) {
+        message = `${player.name}: некому передать 1000 баллов — лидер и отстающий совпали.`;
+      } else {
+        state.players[fromIndex].score -= 1000;
+        state.players[toIndex].score += 1000;
+        message = `${state.players[toIndex].name} получает 1000 баллов от ${state.players[fromIndex].name}.`;
+      }
+    } else {
+      // Для других инструкций из документа выводим текст ведущему, не придумывая эффект.
+      message = `Модификатор для ${player.name}: ${q.answer}`;
+    }
+    buzz.judged = true;
+    state.questionSpent = true;
+    renderPlayersBar();
+    broadcastState();
+    showModifierNotice(message);
+    buzzControl('close');
+    renderBuzzPanel();
+  }
+
+  function showModifierNotice(message) {
+    let notice = document.getElementById('modifier-notice');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.id = 'modifier-notice';
+      notice.className = 'modifier-notice';
+      notice.setAttribute('role', 'status');
+      document.body.appendChild(notice);
+    }
+    notice.textContent = message;
+    notice.classList.remove('show');
+    void notice.offsetWidth;
+    notice.classList.add('show');
+    clearTimeout(notice._hideTimer);
+    notice._hideTimer = setTimeout(() => notice.classList.remove('show'), 6000);
   }
 
   function resetBuzzUI() {
@@ -958,7 +1045,6 @@ async function apiJson(path, method, body) {
     if (bw) bw.textContent = PENALTY_ON_WRONG ? '✗ Неверно −' + price : '✗ Неверно';
   }
 
-  document.getElementById('btn-buzz-open').addEventListener('click', () => { playClick(); buzzControl('open'); });
   document.getElementById('btn-buzz-close').addEventListener('click', () => { playClick(); buzzControl('close'); });
   document.getElementById('btn-buzz-reset').addEventListener('click', () => { playClick(); buzzControl('reset'); });
 
@@ -983,14 +1069,13 @@ async function apiJson(path, method, body) {
   document.getElementById('btn-buzz-correct').addEventListener('click', buzzCorrect);
   document.getElementById('btn-buzz-wrong').addEventListener('click', buzzWrong);
 
-  // Горячие клавиши на экране вопроса (как на timbrica): Пробел — открыть, Enter — верно, Backspace — неверно
+  // Горячие клавиши на экране вопроса: Enter — верно, Backspace — неверно
   document.addEventListener('keydown', e => {
     if (state.phase !== 'question' || e.repeat) return;
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (document.getElementById('score-modal').style.display !== 'none') return;
-    if (e.code === 'Space' && !buzz.open && buzz.winner === null) { e.preventDefault(); buzzControl('open'); }
-    else if (e.code === 'Enter' && buzz.winner !== null) { e.preventDefault(); buzzCorrect(); }
+    if (e.code === 'Enter' && buzz.winner !== null) { e.preventDefault(); buzzCorrect(); }
     else if (e.code === 'Backspace' && buzz.winner !== null) { e.preventDefault(); buzzWrong(); }
   });
 
@@ -1075,15 +1160,6 @@ async function apiJson(path, method, body) {
     startBgMusic();
   }
 
-  function refreshFinalTimerButton() {
-    const b = document.getElementById('btn-final-timer-toggle');
-    if (!b) return;
-    if (state.timer.running) b.textContent = '⏸️ Пауза';
-    else if (state.timer.seconds <= 0) b.textContent = '⏱️ Время!';
-    else if (state.timer.seconds < state.timer.max) b.textContent = '⏱️ Продолжить';
-    else b.textContent = '⏱️ Старт';
-  }
-
   // Собирает экран финала целиком из state (нужно и после перезагрузки страницы)
   function rebuildFinal() {
     finalBuilt = true;
@@ -1159,7 +1235,6 @@ async function apiJson(path, method, body) {
     });
 
     updateFinalTimerUI();
-    refreshFinalTimerButton();
   }
 
   document.getElementById('btn-final-show-question').addEventListener('click', () => {
@@ -1177,37 +1252,21 @@ async function apiJson(path, method, body) {
     state.timer.seconds = 60;
     state.timer.running = false;
     rebuildFinal();
+    startFinalTimer();   // таймер идёт сразу вместе с вопросом
     broadcastState();
   });
 
   document.getElementById('btn-final-back').addEventListener('click', () => { playClick(); requestBack(); });
 
-  document.getElementById('btn-final-timer-toggle').addEventListener('click', () => {
-    playClick();
-    if (state.timer.running) {
-      stopTimer();
-      document.getElementById('btn-final-timer-toggle').textContent = '⏱️ Продолжить';
-      broadcastState();
-    } else if (state.timer.seconds > 0) {
-      startFinalTimer();
-    } else {
-      state.timer.max = 60;
-      state.timer.seconds = 60;
-      startFinalTimer();
-    }
-  });
-
   function startFinalTimer() {
     stopTimer();
     state.timer.running = true;
-    document.getElementById('btn-final-timer-toggle').textContent = '⏸️ Пауза';
     state.timer.interval = setInterval(() => {
       state.timer.seconds--;
       updateFinalTimerUI();
       if (state.timer.seconds <= 5 && state.timer.seconds > 0) playTimerTick();
       if (state.timer.seconds <= 0) {
         stopTimer();
-        document.getElementById('btn-final-timer-toggle').textContent = '⏱️ Время!';
         playWrong();
         flashEdge(false);
       }
@@ -1384,8 +1443,18 @@ async function apiJson(path, method, body) {
       sending = false;
     }
 
-    // pointerdown, а не click: срабатывает сразу при касании, без задержки
-    btn.addEventListener('pointerdown', e => { e.preventDefault(); press(); });
+    // Мобильный Safari/Chrome: pointerdown даёт мгновенный отклик, click оставлен как резервный путь.
+    let lastPointerPress = 0;
+    btn.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' || e.pointerType === 'touch' || e.pointerType === 'pen') {
+        lastPointerPress = Date.now();
+        press();
+      }
+    });
+    btn.addEventListener('click', e => {
+      // Не отправляем второй запрос после pointerdown; click нужен браузерам без Pointer Events.
+      if (Date.now() - lastPointerPress > 700) press();
+    });
     document.addEventListener('keydown', e => {
       if (e.code === 'Space' && !e.repeat) { e.preventDefault(); press(); }
     });

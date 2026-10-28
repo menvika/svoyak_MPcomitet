@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <title>Своя игра — МПКомитет</title>
+  <title>СинтарСус — МПКомитет</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🦕</text></svg>" />
 </head>
@@ -34,13 +34,8 @@
   <!-- ====== START SCREEN (host) ====== -->
   <div id="screen-start" class="screen active">
     <div class="start-container">
-      <div class="dino-decoration">
-        <span class="dino dino-1">🦕</span>
-        <span class="dino dino-2">🦖</span>
-      </div>
       <div class="brand-tag">#МПКомитет</div>
-      <h1 class="game-title">Своя игра</h1>
-      <p class="game-subtitle">🦕 Динозаврики зовут играть! 🦖</p>
+      <h1 class="game-title">Синтурсус</h1>
       <div class="host-start-buttons">
         <button id="btn-continue" class="btn btn-primary btn-large" type="button" style="display:none;">▶ Продолжить игру</button>
         <button id="btn-start" class="btn btn-primary btn-large">Начать игру</button>
@@ -56,6 +51,7 @@
         <div class="buzzer-link-label">🔔 Ссылка для участников (кнопки на телефонах):</div>
         <a id="buzzer-link" class="buzzer-link" href="#" target="_blank" rel="noopener"></a>
         <button id="btn-copy-buzzer-link" class="btn btn-ghost btn-sm" type="button">📋 Копировать</button>
+        <div id="buzzer-alt" class="buzzer-alt"></div>
       </div>
       <p class="host-hint">Режим ведущего: вы видите ответы и управляете баллами.<br>Откройте экран проектора на втором мониторе.</p>
     </div>
@@ -135,13 +131,12 @@
         <div class="buzz-winner" id="buzz-winner" style="display:none;"></div>
         <div class="buzz-locked" id="buzz-locked"></div>
         <div class="buzz-actions">
-          <button id="btn-buzz-open" class="btn btn-primary" type="button">🔔 Открыть кнопки</button>
           <button id="btn-buzz-close" class="btn btn-ghost" type="button" style="display:none;">⛔ Закрыть</button>
           <button id="btn-buzz-correct" class="btn btn-success" type="button" style="display:none;">✓ Верно</button>
           <button id="btn-buzz-wrong" class="btn btn-danger" type="button" style="display:none;">✗ Неверно</button>
           <button id="btn-buzz-reset" class="btn btn-ghost btn-sm" type="button" style="display:none;">↺ Сбросить</button>
         </div>
-        <div class="buzz-hint">Горячие клавиши: Пробел — открыть, Enter — верно, Backspace — неверно</div>
+        <div class="buzz-hint">Кнопки откроются сами через 3 секунды после показа вопроса. Горячие клавиши: Enter — верно, Backspace — неверно</div>
       </div>
 
       <div class="scoring-section" id="scoring-section">
@@ -192,7 +187,6 @@
             <div class="timer-bar" id="final-timer-bar"></div>
             <span class="timer-text" id="final-timer-text">60</span>
           </div>
-          <button id="btn-final-timer-toggle" class="btn btn-ghost btn-sm">⏱️ Старт</button>
         </div>
 
         <div class="scoring-section" id="final-scoring-section">
@@ -224,13 +218,8 @@
   <div id="display-view" class="display-view" style="display:none;">
     <!-- Display: Start (ожидание игры) -->
     <div id="display-start-screen" class="display-screen active">
-      <div class="dino-decoration">
-        <span class="dino dino-1">🦕</span>
-        <span class="dino dino-2">🦖</span>
-      </div>
       <div class="brand-tag">#МПКомитет</div>
-      <h1 class="game-title">Своя игра</h1>
-      <p class="game-subtitle">🦕 Динозаврики зовут играть! 🦖</p>
+      <h1 class="game-title">СинтарСус</h1>
       <div class="display-join">
         <div class="display-join-label">🔔 Кнопки для игроков — откройте на телефоне:</div>
         <div class="display-join-link" id="display-buzzer-link"></div>
