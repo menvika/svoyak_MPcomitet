@@ -1529,3 +1529,174 @@ body::before {
 }
 
 .screen { position: relative; z-index: 1; }
+
+/* ===================================================================
+   БОЛЬШИЕ ФОТО (проектор и экран ведущего)
+   =================================================================== */
+/* Проектор: текст слева, крупное фото справа */
+#display-question-screen { gap: var(--space-3); }
+#display-question-screen .display-question-card { max-width: 1700px; }
+#display-question-screen.has-qimg .display-question-card {
+  flex-direction: row; align-items: center; justify-content: space-around; gap: var(--space-8);
+  padding: var(--space-5) var(--space-8); min-height: 0;
+}
+#display-question-screen.has-qimg .display-question-text { flex: 1 1 38%; }
+#display-question-screen .display-question-image-wrapper { flex: 1 1 52%; max-width: none; overflow: visible; }
+#display-question-screen .display-question-image {
+  width: auto; height: auto; max-width: 100%; max-height: 64vh; object-fit: contain;
+  border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+}
+/* Если открыт ответ с фото — крупное фото ответа вместо фото вопроса */
+#display-question-screen.has-aimg .display-question-card .display-question-image-wrapper { display: none !important; }
+#display-question-screen.has-aimg .display-question-card { flex-direction: column; padding: var(--space-4) var(--space-8); }
+#display-question-screen.has-aimg .display-question-card .display-question-text { flex: 0 0 auto; font-size: clamp(1.1rem, 1.8vw, 1.8rem); }
+/* Ответ без нового фото: фото вопроса уменьшаем, чтобы влез ответ */
+#display-question-screen.answer-open:not(.has-aimg) .display-question-image { max-height: 36vh; }
+
+#display-question-screen .display-answer-reveal {
+  max-width: 1700px; display: none; align-items: center; justify-content: space-around; gap: var(--space-8);
+  padding: var(--space-4) var(--space-8);
+}
+#display-question-screen .display-answer-reveal[style*="block"] { display: flex !important; }
+#display-question-screen .display-answer-reveal .display-answer-label { display: none; }
+#display-question-screen .display-answer-reveal .display-answer-text { flex: 1 1 40%; }
+#display-question-screen .display-answer-reveal .display-question-image-wrapper { flex: 1 1 50%; }
+#display-question-screen.has-aimg .display-answer-reveal { flex: 1 1 auto; min-height: 0; }
+#display-question-screen.has-aimg .display-answer-reveal .display-question-image { max-height: 60vh; }
+#display-question-screen .display-answer-reveal .display-question-image-wrapper[style*="none"] { display: none !important; }
+
+/* Экран ведущего: фото крупнее */
+.question-image-wrapper { max-width: 100%; overflow: visible; }
+.question-image { max-height: 58vh; border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
+.host-answer-image .question-image { max-height: 42vh; }
+@media (max-width: 900px) { .question-image { max-height: 48vh; } }
+#display-question-screen.has-aimg .display-question-card { min-height: 0; padding-top: var(--space-3); padding-bottom: var(--space-3); }
+#display-question-screen.has-aimg .display-answer-reveal .display-question-image { max-height: 50vh; }
+
+/* ===================================================================
+   ФОН: следы лапок динозавров по краям (не на стартовых экранах)
+   =================================================================== */
+.bg-paws { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+.bg-paws::before, .bg-paws::after { content: ''; position: absolute; top: 0; bottom: 0; width: 220px; background-repeat: repeat-y; }
+.bg-paws::before { left: 0; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='520' viewBox='0 0 220 520'%3E%3Cg fill='%23a4161a' fill-opacity='.10'%3E%3Cg transform='translate(60 50) rotate(-18) scale(1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(120 150) rotate(12) scale(1.15)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(55 255) rotate(-14) scale(1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(115 360) rotate(16) scale(1.1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(70 460) rotate(-10) scale(1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); background-position: left top; }
+.bg-paws::after { right: 0; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='520' viewBox='0 0 220 520'%3E%3Cg fill='%23a4161a' fill-opacity='.10'%3E%3Cg transform='translate(160 90) rotate(18) scale(1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(100 200) rotate(-12) scale(1.15)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(165 300) rotate(16) scale(1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(105 405) rotate(-14) scale(1.1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3Cg transform='translate(160 500) rotate(12) scale(1)'%3E%3Cpath d='M0 8 C-9 8 -13 20 -7 28 C-3 33 3 33 7 28 C13 20 9 8 0 8Z'/%3E%3Cellipse cx='-13' cy='-2' rx='4.2' ry='6.2' transform='rotate(-25 -13 -2)'/%3E%3Cellipse cx='-4.5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='5' cy='-10' rx='4.2' ry='6.6'/%3E%3Cellipse cx='13.5' cy='-2' rx='4.2' ry='6.2' transform='rotate(25 13.5 -2)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); background-position: right top; }
+@media (max-width: 900px) { .bg-paws { display: none; } }
+body[data-view="buzzer"] .bg-paws,
+body[data-view="host"]:has(#screen-start.active) .bg-paws,
+body[data-view="display"]:has(#display-start-screen.active) .bg-paws { display: none; }
+
+/* ===================================================================
+   МАЛЕНЬКИЙ ДИНОЗАВР, ХОДИТ НАД ТАБЛИЦЕЙ
+   =================================================================== */
+.dino-walk { position: relative; width: 100%; height: 54px; margin: 0 0 var(--space-1); pointer-events: none; }
+.display-dino-walk { max-width: 1400px; height: 78px; }
+.dino-walker { position: absolute; left: 0; bottom: 0; width: 72px; height: 50px;
+  animation: dinoWalk 18s linear infinite; }
+.display-dino-walk .dino-walker { width: 104px; height: 72px; }
+.dino-svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.dino-bob { animation: dinoStep .5s ease-in-out infinite; transform-origin: 50% 100%; }
+.dino-svg .leg { transform-box: fill-box; transform-origin: 50% 8%; animation: legSwing .5s ease-in-out infinite; }
+.dino-svg .leg-b, .dino-svg .leg-d { animation-delay: -.25s; }
+@keyframes dinoWalk {
+  0%   { left: 0; transform: scaleX(1); }
+  47%  { left: calc(100% - 72px); transform: scaleX(1); }
+  50%  { left: calc(100% - 72px); transform: scaleX(-1); }
+  97%  { left: 0; transform: scaleX(-1); }
+  100% { left: 0; transform: scaleX(1); }
+}
+.display-dino-walk .dino-walker { animation-name: dinoWalkBig; }
+@keyframes dinoWalkBig {
+  0%   { left: 0; transform: scaleX(1); }
+  47%  { left: calc(100% - 104px); transform: scaleX(1); }
+  50%  { left: calc(100% - 104px); transform: scaleX(-1); }
+  97%  { left: 0; transform: scaleX(-1); }
+  100% { left: 0; transform: scaleX(1); }
+}
+@keyframes dinoStep { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes legSwing { 0%,100% { transform: rotate(-22deg); } 50% { transform: rotate(22deg); } }
+@media (prefers-reduced-motion: reduce) { .dino-walker, .dino-bob, .dino-svg .leg { animation: none; } }
+#screen-board .dino-walk { max-width: 1200px; margin: var(--space-3) auto 0; }
+#screen-board .dino-walk { margin-top: auto; }
+#screen-board .board-wrapper { flex: 0 0 auto; margin-bottom: auto; }
+
+/* Пиксельный динозаврик: маленький, полупрозрачный, ходит медленно */
+.dino-walk { height: 30px; }
+.display-dino-walk { height: 40px; }
+.dino-walker { width: 36px; height: 27px; opacity: .55; animation: dinoWalk 48s linear infinite; }
+.display-dino-walk .dino-walker { width: 48px; height: 36px; animation-name: dinoWalkBig; animation-duration: 48s; }
+.dino-svg .px-a { animation: pxA .5s steps(1) infinite; }
+.dino-svg .px-b { animation: pxB .5s steps(1) infinite; }
+@keyframes pxA { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes pxB { 0% { opacity: 0; } 50% { opacity: 1; } }
+.dino-bob { animation: none; }
+@keyframes dinoWalk {
+  0% { left: 0; transform: scaleX(1); } 48% { left: calc(100% - 36px); transform: scaleX(1); }
+  50% { left: calc(100% - 36px); transform: scaleX(-1); } 98% { left: 0; transform: scaleX(-1); } 100% { left: 0; transform: scaleX(1); } }
+@keyframes dinoWalkBig {
+  0% { left: 0; transform: scaleX(1); } 48% { left: calc(100% - 48px); transform: scaleX(1); }
+  50% { left: calc(100% - 48px); transform: scaleX(-1); } 98% { left: 0; transform: scaleX(-1); } 100% { left: 0; transform: scaleX(1); } }
+.host-question-body { grid-template-columns: 1.8fr 1fr; }
+
+/* ===================================================================
+   ВОПРОС С СЕКРЕТОМ и МОДИФИКАТОР
+   =================================================================== */
+.secret-box { flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
+.secret-emoji { font-size: 4rem; line-height: 1; animation: secretShake 1.6s ease-in-out infinite; }
+.secret-title { font-family: var(--font-display); font-size: var(--text-3xl); text-transform: uppercase; color: var(--color-red); letter-spacing: .04em; }
+.secret-sub { font-size: var(--text-lg); color: var(--color-text-muted); }
+.secret-choices { flex-wrap: wrap; justify-content: center; gap: var(--space-3); }
+.secret-choice { font-size: var(--text-lg); min-width: 140px; }
+.secret-banner { display: inline-block; padding: 6px 18px; border-radius: 999px; background: var(--color-red-tint); color: var(--color-red-dark);
+  border: 2px solid var(--color-red); font-weight: 700; font-size: var(--text-base); }
+.display-secret-banner { font-size: clamp(1.1rem, 1.8vw, 1.9rem); padding: 8px 26px; }
+.display-question-text.secret-title-text { font-family: var(--font-display); text-transform: uppercase; color: var(--color-red);
+  font-size: clamp(2.4rem, 6vw, 5.5rem); letter-spacing: .04em; animation: secretTitle 1.8s ease-in-out infinite; }
+@keyframes secretShake { 0%,100% { transform: rotate(0) scale(1); } 20% { transform: rotate(-9deg) scale(1.08); } 40% { transform: rotate(8deg) scale(1.08); } 60% { transform: rotate(-5deg); } 80% { transform: rotate(4deg); } }
+@keyframes secretTitle { 0%,100% { transform: scale(1); text-shadow: 0 0 0 rgba(201,39,45,0); } 50% { transform: scale(1.06); text-shadow: 0 0 26px rgba(201,39,45,.45); } }
+
+/* Анимированный текст «МОДИФИКАТОР» */
+.modifier-text { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .08em; font-weight: 800;
+  background: linear-gradient(100deg, #7f1015 0%, #c9272d 30%, #ff8a8a 50%, #c9272d 70%, #7f1015 100%); background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+  animation: modShine 2.4s linear infinite, modPop 1.2s ease-in-out infinite; display: inline-block; }
+.display-question-text.modifier-text { font-size: clamp(2.6rem, 7vw, 6.5rem); }
+.question-text.modifier-text { font-size: var(--text-3xl); }
+@keyframes modShine { to { background-position: -250% 0; } }
+@keyframes modPop { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@media (prefers-reduced-motion: reduce) { .modifier-text, .secret-emoji, .secret-title-text { animation: none; } }
+
+/* ===== Фото покрупнее: занимает основную часть экрана ===== */
+#display-view { padding: var(--space-3) var(--space-4); }
+#display-question-screen { gap: var(--space-2); }
+#display-question-screen .display-question-top { margin: 0; }
+#display-question-screen.has-qimg .display-question-card { max-width: 100%; padding: var(--space-3) var(--space-5); gap: var(--space-5); }
+#display-question-screen.has-qimg .display-question-text { flex: 1 1 28%; }
+#display-question-screen .display-question-image-wrapper { flex: 1 1 72%; }
+#display-question-screen .display-question-image { max-height: 74vh; max-width: 100%; }
+#display-question-screen.answer-open:not(.has-aimg) .display-question-image { max-height: 44vh; }
+#display-question-screen.has-aimg .display-answer-reveal { max-width: 100%; }
+#display-question-screen.has-aimg .display-answer-reveal .display-question-image { max-height: 66vh; }
+#display-question-screen.has-aimg .display-answer-reveal .display-answer-text { flex: 1 1 28%; }
+#display-question-screen.has-aimg .display-answer-reveal .display-question-image-wrapper { flex: 1 1 72%; }
+#display-question-screen .display-players-bar { margin-top: 0; }
+#display-question-screen .display-player-card { padding: var(--space-1) var(--space-2); }
+/* ведущий */
+.host-question-body { grid-template-columns: 2.2fr 1fr; }
+.question-image { max-height: 70vh; }
+.question-card { padding-left: var(--space-5); padding-right: var(--space-5); }
+#display-question-screen.has-qimg .display-question-card { justify-content: center; gap: 4vw; }
+#display-question-screen.has-qimg .display-question-text { flex: 0 1 34%; }
+#display-question-screen .display-question-image-wrapper { flex: 0 1 auto; }
+#display-question-screen .display-question-image { max-height: 62vh; }
+#display-question-screen.answer-open:not(.has-aimg) .display-question-image { max-height: 38vh; }
+#display-question-screen.has-aimg .display-answer-reveal { justify-content: center; gap: 4vw; }
+#display-question-screen.has-aimg .display-answer-reveal .display-question-image { max-height: 54vh; }
+#display-question-screen.has-aimg .display-answer-reveal .display-answer-text { flex: 0 1 34%; }
+#display-question-screen.has-aimg .display-answer-reveal .display-question-image-wrapper { flex: 0 1 auto; }
+#display-question-screen .display-answer-reveal .display-answer-text { flex: 0 1 34%; }
+
+.answer-section-image { margin: var(--space-3) auto 0; }
+.answer-section-image .question-image { max-height: 30vh; }
+/* проектор: длинный вопрос не должен выдавливать фото ответа за экран */
+#display-question-screen.has-aimg:not(.has-qimg) .display-question-text { font-size: clamp(.95rem, 1.5vw, 1.5rem) !important; line-height: 1.25; }
+#display-question-screen.has-aimg .display-answer-reveal .display-question-image { max-height: 50vh; }

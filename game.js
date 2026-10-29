@@ -161,6 +161,9 @@ async function apiJson(path, method, body) {
   // ===================== VIEW MODE =====================
   const VIEW = new URLSearchParams(location.search).get('view') || 'host'; // 'host' | 'display'
 
+  // Сколько раундов в игре: если round3 пустой, после 2 раунда сразу финал
+  const ROUNDS_TOTAL = (QUESTIONS.round3 && QUESTIONS.round3.length) ? 3 : 2;
+
   const ROUND1_PRICES = [200, 404, 607, 777, 869, 1007];
   const ROUND2_PRICES = [200, 400, 600, 800, 1000];
   const ROUND3_PRICES = [300, 600, 900, 1200, 1500];
@@ -206,6 +209,10 @@ async function apiJson(path, method, body) {
   // ===================== SYNC (backend server) =====================
   let syncSeq = 0; // растёт с каждой отправкой: сервер игнорирует устаревшие запросы
 
+  function secretHidden(q) {
+    return !!(q && q.passQuestion && q.secretStage !== 'done');
+  }
+
   function buildSyncState() {
     return {
       type: 'sync',
@@ -217,8 +224,13 @@ async function apiJson(path, method, body) {
       currentQuestion: state.currentQuestion ? {
         category: state.currentQuestion.category,
         price: state.currentQuestion.price,
-        question: state.currentQuestion.question,
-        image: state.currentQuestion.image,
+        passQuestion: !!state.currentQuestion.passQuestion,
+        modifier: !!state.currentQuestion.modifier,
+        secretStage: state.currentQuestion.passQuestion ? (state.currentQuestion.secretStage || 'intro') : null,
+        secretTo: state.currentQuestion.secretTo || null,
+        // у вопроса с секретом текст и фото скрыты, пока вопрос не передан
+        question: secretHidden(state.currentQuestion) ? '' : state.currentQuestion.question,
+        image: secretHidden(state.currentQuestion) ? null : state.currentQuestion.image,
         answerImage: state.answerRevealed ? (state.currentQuestion.answerImage || null) : null,
         answer: state.answerRevealed ? state.currentQuestion.answer : null,
       } : null,
@@ -701,7 +713,7 @@ async function apiJson(path, method, body) {
 
   function checkRoundTransition() {
     if (allQuestionsUsed(state.round)) {
-      if (state.round < 3) {
+      if (state.round < ROUNDS_TOTAL) {
         state.round++;
         renderBoard();
         renderPlayersBar();
@@ -762,6 +774,8 @@ async function apiJson(path, method, body) {
     document.getElementById('question-price').textContent = qData.price;
     document.getElementById('question-category').textContent = category;
     document.getElementById('question-text').textContent = qData.question;
+    document.getElementById('question-text').classList.toggle('modifier-text', !!qData.modifier);
+    if (qData.passQuestion) { state.currentQuestion.secretStage = 'intro'; state.currentQuestion.secretTo = null; }
 
     // Host always sees the answer
     document.getElementById('host-answer-text').textContent = qData.answer;
@@ -777,7 +791,8 @@ async function apiJson(path, method, body) {
     };
     hint.style.display = 'none';
     // автоподобранные фото (image/<раунд>/<тема>.<вопрос>) молчат, если файла нет
-    loadQuestionImage(img, imgWrap, qData.image, qData.autoImage ? null : onMissing);
+    if (!qData.passQuestion) loadQuestionImage(img, imgWrap, qData.image, qData.autoImage ? null : onMissing);
+    else imgWrap.style.display = 'none';
     loadQuestionImage(document.getElementById('host-answer-image'), document.getElementById('host-answer-image-wrapper'), qData.answerImage, onMissing);
 
     // Hide display answer section
@@ -797,6 +812,8 @@ async function apiJson(path, method, body) {
       questionCard.classList.toggle('question-pass-animation', !!qData.passQuestion);
       questionCard.classList.toggle('question-modifier-animation', !!qData.modifier);
     }
+    renderSecretHost();
+    if (qData.passQuestion) { broadcastState(); return; } // кнопки откроются только если нужно — вопрос с секретом отвечает выбранный игрок
     // кнопки у участников открываются сами через 3 секунды после показа вопроса
     clearTimeout(buzzAutoTimer);
     const openedFor = state.currentQuestion;
@@ -804,6 +821,63 @@ async function apiJson(path, method, body) {
       if (state.phase === 'question' && state.currentQuestion === openedFor && !buzz.open && buzz.winner === null) buzzControl('open');
     }, BUZZ_AUTO_OPEN_MS);
   }
+
+  // ===== Вопрос с секретом: заставка → «Передать вопрос» → выбор игрока → текст вопроса =====
+  function renderSecretHost() {
+    const q = state.currentQuestion;
+    const box = document.getElementById('secret-box');
+    const banner = document.getElementById('secret-banner');
+    const text = document.getElementById('question-text');
+    if (!box || !q) return;
+    const hidden = secretHidden(q);
+    box.style.display = hidden ? 'flex' : 'none';
+    text.style.display = hidden ? 'none' : '';
+    if (hidden) {
+      document.getElementById('btn-secret-pass').style.display = q.secretStage === 'intro' ? 'inline-flex' : 'none';
+      const ch = document.getElementById('secret-choices');
+      ch.style.display = q.secretStage === 'choose' ? 'flex' : 'none';
+      document.getElementById('secret-sub').textContent = q.secretStage === 'choose'
+        ? 'Кому передаём вопрос?' : 'Выбравший вопрос передаёт его другому игроку';
+      ch.innerHTML = '';
+      if (q.secretStage === 'choose') {
+        state.players.forEach((p, i) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'btn btn-ghost secret-choice'; b.textContent = p.name;
+          b.addEventListener('click', () => passSecretTo(i));
+          ch.appendChild(b);
+        });
+      }
+    }
+    if (q.passQuestion && q.secretStage === 'done') {
+      banner.style.display = 'block';
+      banner.textContent = '🎁 Вопрос передан: ' + (q.secretTo || '');
+    } else banner.style.display = 'none';
+  }
+
+  function passSecretTo(i) {
+    const q = state.currentQuestion;
+    if (!q || !state.players[i]) return;
+    playCorrect();
+    q.secretStage = 'done';
+    q.secretTo = state.players[i].name;
+    const img = document.getElementById('question-image');
+    const wrap = document.getElementById('question-image-wrapper');
+    document.getElementById('question-text').textContent = q.question;
+    loadQuestionImage(img, wrap, q.image, null);
+    renderSecretHost();
+    const card = document.querySelector('.question-card');
+    if (card) { card.classList.remove('question-pass-animation'); void card.offsetWidth; card.classList.add('question-pass-animation'); }
+    broadcastState();
+  }
+
+  document.getElementById('btn-secret-pass').addEventListener('click', () => {
+    const q = state.currentQuestion;
+    if (!q || !q.passQuestion) return;
+    playClick();
+    q.secretStage = 'choose';
+    renderSecretHost();
+    broadcastState();
+  });
 
   // Выход из вопроса на поле: «← К полю» (done=false) и «Готово» (done=true).
   // Сам переход делает doBack → finishLeaveQuestion, чтобы кнопка «Назад» браузера работала так же.
@@ -840,6 +914,7 @@ async function apiJson(path, method, body) {
     const q = state.currentQuestion;
     document.getElementById('answer-text').textContent = q.answer;
     document.getElementById('answer-section').style.display = 'block';
+    loadQuestionImage(document.getElementById('answer-image'), document.getElementById('answer-image-wrapper'), q.answerImage, null);
     document.getElementById('btn-reveal-answer').style.display = 'none';
     broadcastState();
   });
@@ -1014,7 +1089,7 @@ async function apiJson(path, method, body) {
     if (!buzz.online) { text = 'Нет связи с сервером кнопок'; cls = 'offline'; }
     else if (winnerName !== null && buzz.judged) { text = 'Ответ учтён'; cls = 'closed'; }
     else if (winnerName !== null) { text = 'Первым нажал — ждём ответ'; cls = 'winner'; }
-    else if (buzz.open) { text = 'Кнопки открыты — ждём нажатия'; cls = 'open'; }
+    else if (buzz.open) { text = 'Ждём нажатия'; cls = 'open'; }
     else if (allLocked) { text = 'Все уже ответили неверно'; cls = 'closed'; }
     else { text = 'Кнопки закрыты'; cls = 'closed'; }
     status.textContent = text;
@@ -1418,7 +1493,7 @@ async function apiJson(path, method, body) {
       if (locked) { cls = 'locked'; label = 'ЖДЁМ'; sub = 'Вы уже отвечали на этот вопрос'; disabled = true; }
       else if (net.winner !== null && net.winner === me) { cls = 'win'; label = 'ВЫ ПЕРВЫЙ!'; sub = 'Отвечайте ведущему'; disabled = true; }
       else if (net.winner !== null) { cls = 'lost'; label = 'НЕ УСПЕЛИ'; sub = 'Первым нажал: ' + PLAYER_NAMES[net.winner]; disabled = true; }
-      else if (net.open) { cls = 'ready'; label = 'ЖМИ!'; sub = 'Кнопки открыты'; }
+      else if (net.open) { cls = 'ready'; label = 'ЖМИ!'; sub = 'Нажмите как можно быстрее'; }
       else { cls = 'idle'; label = 'ЖДИТЕ'; sub = 'Ведущий читает вопрос…'; }
 
       btn.className = 'buzzer-btn ' + cls;
@@ -1588,7 +1663,23 @@ async function apiJson(path, method, body) {
 
       document.getElementById('display-question-price').textContent = q.price;
       document.getElementById('display-question-category').textContent = q.category;
-      document.getElementById('display-question-text').textContent = q.question;
+      const secretWait = !!(q.passQuestion && q.secretStage !== 'done');
+      const dText = document.getElementById('display-question-text');
+      dText.textContent = secretWait ? 'Вопрос с секретом' : q.question;
+      dText.classList.toggle('secret-title-text', secretWait);
+      dText.classList.toggle('modifier-text', !!q.modifier);
+      const dBanner = document.getElementById('display-secret-banner');
+      if (q.passQuestion) {
+        dBanner.style.display = 'block';
+        dBanner.textContent = q.secretStage === 'done' ? '🎁 Вопрос передан: ' + (q.secretTo || '')
+          : q.secretStage === 'choose' ? 'Выбираем, кому передать вопрос…' : '🎁 Выбравший вопрос передаёт его другому игроку';
+        const sig = q.category + '|' + q.price + '|' + q.secretStage;
+        const dCard = document.getElementById('display-question-card');
+        if (dCard.dataset.secretSig !== sig) {
+          dCard.dataset.secretSig = sig;
+          dCard.classList.remove('question-pass-animation'); void dCard.offsetWidth; dCard.classList.add('question-pass-animation');
+        }
+      } else dBanner.style.display = 'none';
       // Длинные вопросы с вариантами ответов должны помещаться на экран проектора
       const qText = String(q.question || '');
       const qLoad = qText.length + 45 * (qText.split('\n').length - 1) + (q.image ? 150 : 0);
@@ -1617,6 +1708,13 @@ async function apiJson(path, method, body) {
         answerReveal.style.display = 'none';
       }
 
+      // Классы для раскладки: фото должно занимать всё свободное место
+      const qScreen = document.getElementById('display-question-screen');
+      const shown = !!(displayState.answerRevealed && q.answer);
+      qScreen.classList.toggle('has-qimg', !!q.image);
+      qScreen.classList.toggle('answer-open', shown);
+      qScreen.classList.toggle('has-aimg', shown && !!q.answerImage);
+
       renderDisplayBuzz();
       renderDisplayPlayersBar('display-players-bar-question', true);
     }
@@ -1632,8 +1730,8 @@ async function apiJson(path, method, body) {
         el.className = 'display-buzz winner';
         el.innerHTML = '<span class="display-buzz-icon">🔔</span><span class="display-buzz-label">Первым нажал</span><span class="display-buzz-name">' + esc(players[w].name) + '</span>';
       } else if (b.open) {
-        el.className = 'display-buzz open';
-        el.innerHTML = '<span class="display-buzz-icon">🔔</span><span class="display-buzz-label">Кнопки открыты — жмите!</span>';
+        el.className = 'display-buzz';
+        el.innerHTML = '';
       } else {
         el.className = 'display-buzz';
         el.innerHTML = '';
