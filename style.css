@@ -1725,3 +1725,13 @@ body[data-view="display"]:has(#display-start-screen.active) .start-dinos { displ
 #display-start-screen .display-join-label { font-size: clamp(.7rem, .9vw, .9rem); margin-bottom: 2px; }
 #display-start-screen .display-join-link { font-size: clamp(.8rem, 1.1vw, 1.1rem); }
 #display-start-screen .game-title { font-size: clamp(2.5rem, 4.6vw, 5rem); }
+/* проектор: динозаврик стоит лапами прямо на верхней рамке таблицы и идёт помедленнее */
+#display-board-screen .display-dino-walk { transform: translateY(22px); position: relative; z-index: 2; }
+#display-board-screen .display-dino-walk .dino-walker { animation-duration: 30s; }
+
+/* кто нажал первым — спокойная подсветка: только внутренняя обводка рамки карточки */
+#display-question-screen .display-player-card.buzzed {
+  border-color: #d9a418; background: #fff9e8;
+  box-shadow: inset 0 0 0 4px #f4c542;
+  transform: none; animation: none;
+}

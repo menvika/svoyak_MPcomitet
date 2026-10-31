@@ -761,7 +761,7 @@ async function apiJson(path, method, body) {
   }
 
   // ===================== QUESTION FLOW =====================
-  const BUZZ_AUTO_OPEN_MS = 3000;
+  const BUZZ_AUTO_OPEN_MS = 0; // кнопки открываются сразу при показе вопроса
   let buzzAutoTimer = null;
   function openQuestion(ci, qi, qKey, category, qData) {
     state.currentQuestion = { ...qData, category, qKey, ci, qi };
@@ -814,7 +814,7 @@ async function apiJson(path, method, body) {
     }
     renderSecretHost();
     if (qData.passQuestion) { broadcastState(); return; } // кнопки откроются только если нужно — вопрос с секретом отвечает выбранный игрок
-    // кнопки у участников открываются сами через 3 секунды после показа вопроса
+    // кнопки у участников открываются сами сразу после показа вопроса
     clearTimeout(buzzAutoTimer);
     const openedFor = state.currentQuestion;
     buzzAutoTimer = setTimeout(() => {
@@ -1007,8 +1007,9 @@ async function apiJson(path, method, body) {
     const player = state.players[playerIndex];
     let message = '';
     if (instruction.includes('плюс на минус')) {
-      player.score -= Number(q.price || 0);
-      message = `${player.name}: модификатор «Плюс на минус» — ${q.price} баллов снято.`;
+      const before = Number(player.score) || 0;
+      player.score = before === 0 ? 0 : -before;
+      message = `${player.name}: модификатор «Плюс на минус» — баллы меняют знак: ${before} → ${player.score}.`;
     } else if (instruction.includes('забери 1000 баллов')) {
       const leaderScore = Math.max(...state.players.map(p => p.score));
       const leaderIndex = state.players.findIndex(p => p.score === leaderScore);
@@ -1029,6 +1030,11 @@ async function apiJson(path, method, body) {
     }
     buzz.judged = true;
     state.questionSpent = true;
+    // после нажатия сразу показываем суть модификатора (ведущему и на проекторе)
+    state.answerRevealed = true;
+    document.getElementById('answer-text').textContent = q.answer;
+    document.getElementById('answer-section').style.display = 'block';
+    document.getElementById('btn-reveal-answer').style.display = 'none';
     renderPlayersBar();
     broadcastState();
     showModifierNotice(message);
@@ -1726,16 +1732,9 @@ async function apiJson(path, method, body) {
       const b = displayState.buzz || {};
       const players = displayState.players || [];
       const w = (b.winner === null || b.winner === undefined) ? null : b.winner;
-      if (w !== null && players[w]) {
-        el.className = 'display-buzz winner';
-        el.innerHTML = '<span class="display-buzz-icon">🔔</span><span class="display-buzz-label">Первым нажал</span><span class="display-buzz-name">' + esc(players[w].name) + '</span>';
-      } else if (b.open) {
-        el.className = 'display-buzz';
-        el.innerHTML = '';
-      } else {
-        el.className = 'display-buzz';
-        el.innerHTML = '';
-      }
+      // Плашки нет: нажавшего показывает подсветка его карточки внизу
+      el.className = 'display-buzz';
+      el.innerHTML = '';
     }
 
     function renderDisplayFinal() {
