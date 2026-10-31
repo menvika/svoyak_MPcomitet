@@ -1700,3 +1700,28 @@ body[data-view="display"]:has(#display-start-screen.active) .bg-paws { display: 
 /* проектор: длинный вопрос не должен выдавливать фото ответа за экран */
 #display-question-screen.has-aimg:not(.has-qimg) .display-question-text { font-size: clamp(.95rem, 1.5vw, 1.5rem) !important; line-height: 1.25; }
 #display-question-screen.has-aimg .display-answer-reveal .display-question-image { max-height: 50vh; }
+
+/* ===================================================================
+   СТАРТОВЫЙ ЭКРАН: ребята-динозавры по краям (как на макете 1920×1080)
+   =================================================================== */
+.start-dinos { display: none; position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+body[data-view="host"]:has(#screen-start.active) .start-dinos,
+body[data-view="display"]:has(#display-start-screen.active) .start-dinos { display: block; }
+.start-dinos .sd { position: absolute; height: auto; user-select: none; animation: sdBob 6s ease-in-out infinite; }
+.sd-ptero    { left: 0.5%;  top: 3%;    width: 22.1%; animation-delay: -1s; }
+.sd-plesio   { left: -2.5%; top: 12.5%; width: 30.9%; animation-delay: -3s; }
+.sd-ankylo   { left: 7.3%;  top: 59%;   width: 26%;   animation-delay: -2s; }
+.sd-trex-big { left: 67%;   top: 1%;    width: 33.6%; animation-delay: -4s; }
+.sd-trex-small { left: 62.7%; top: 44.5%; width: 27.5%; animation-delay: -5s; }
+@keyframes sdBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@media (max-width: 1100px) { .start-dinos .sd { opacity: .55; } }
+@media (max-width: 760px) { .start-dinos { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { .start-dinos .sd { animation: none; } }
+/* плашка со ссылкой на проекторе не заезжает на динозавров */
+#display-start-screen .display-join { max-width: min(36vw, 700px); margin-left: auto; margin-right: auto; }
+#display-start-screen .display-join-link { overflow-wrap: anywhere; font-size: clamp(1rem, 1.6vw, 1.6rem); }
+/* плашка «кнопки для игроков» на проекторе — компактнее */
+#display-start-screen .display-join { max-width: min(30vw, 520px); padding: var(--space-2) var(--space-4); border-width: 2px; margin-top: var(--space-4); }
+#display-start-screen .display-join-label { font-size: clamp(.7rem, .9vw, .9rem); margin-bottom: 2px; }
+#display-start-screen .display-join-link { font-size: clamp(.8rem, 1.1vw, 1.1rem); }
+#display-start-screen .game-title { font-size: clamp(2.5rem, 4.6vw, 5rem); }

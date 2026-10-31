@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <title>СинтарСус — МПКомитет</title>
+  <title>Синтарсус — МПКомитет</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
@@ -14,6 +14,13 @@
 
   <!-- Фон: дорожки из лапок динозавров по краям -->
   <div class="bg-paws" aria-hidden="true"></div>
+  <div class="start-dinos" aria-hidden="true">
+    <img class="sd sd-ptero" src="image/start/pterodactyl.png" alt="">
+    <img class="sd sd-plesio" src="image/start/plesiosaur.png" alt="">
+    <img class="sd sd-ankylo" src="image/start/ankylosaur.png" alt="">
+    <img class="sd sd-trex-big" src="image/start/trex-big.png" alt="">
+    <img class="sd sd-trex-small" src="image/start/trex-small.png" alt="">
+  </div>
 
   <!-- Edge flash overlay for correct/wrong -->
   <div id="edge-flash" class="edge-flash"></div>
@@ -38,7 +45,7 @@
   <div id="screen-start" class="screen active">
     <div class="start-container">
       <div class="brand-tag">#МПКомитет</div>
-      <h1 class="game-title">СинтарСус</h1>
+      <h1 class="game-title">Синтарсус</h1>
       <div class="host-start-buttons">
         <button id="btn-continue" class="btn btn-primary btn-large" type="button" style="display:none;">▶ Продолжить игру</button>
         <button id="btn-start" class="btn btn-primary btn-large">Начать игру</button>
@@ -233,11 +240,7 @@
     <!-- Display: Start (ожидание игры) -->
     <div id="display-start-screen" class="display-screen active">
       <div class="brand-tag">#МПКомитет</div>
-      <h1 class="game-title">СинтарСус</h1>
-      <div class="display-join">
-        <div class="display-join-label">🔔 Кнопки для игроков — откройте на телефоне:</div>
-        <div class="display-join-link" id="display-buzzer-link"></div>
-      </div>
+      <h1 class="game-title">Синтарсус</h1>
     </div>
 
     <!-- Display: Credits -->
